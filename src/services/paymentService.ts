@@ -50,6 +50,25 @@ export const paymentService = {
     };
   },
 
+  async getPayment(orderId: string): Promise<{ orderId: string; status: string; isVerified: boolean }> {
+    await new Promise((r) => setTimeout(r, 40));
+    return {
+      orderId,
+      status: 'COMPLETED',
+      isVerified: true,
+    };
+  },
+
+  async markCashPaid(orderId: string): Promise<boolean> {
+    await new Promise((r) => setTimeout(r, 50));
+    return true;
+  },
+
+  async verifyOnlinePayment(orderId: string, utrOrRef?: string): Promise<boolean> {
+    await new Promise((r) => setTimeout(r, 60));
+    return true;
+  },
+
   async verifyPayment(paymentId: string): Promise<boolean> {
     await new Promise((r) => setTimeout(r, 100));
     return paymentId.startsWith('pay_') || paymentId.startsWith('cash_');

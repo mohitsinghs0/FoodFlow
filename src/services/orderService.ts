@@ -2,7 +2,8 @@ import { Order, OrderStatus } from '../types';
 import { INITIAL_ORDERS } from '../data/mockData';
 
 const ORDERS_STORAGE_KEY = 'foodflow_customer_orders';
-const LISTENERS_MAP = new Map<string, Set<(order: Order) => void>>();
+const ORDER_LISTENERS_MAP = new Map<string, Set<(order: Order) => void>>();
+const SHOP_ORDER_LISTENERS = new Map<string, Set<(orders: Order[]) => void>>();
 
 export const orderService = {
   getStoredOrders(): Order[] {
@@ -26,14 +27,90 @@ export const orderService = {
   },
 
   async getCustomerOrders(): Promise<Order[]> {
-    await new Promise((r) => setTimeout(r, 60));
+    await new Promise((r) => setTimeout(r, 40));
     return this.getStoredOrders();
   },
 
-  async getOrder(orderId: string): Promise<Order | null> {
+  async getShopOrders(shopId: string): Promise<Order[]> {
+    await new Promise((r) => setTimeout(r, 30));
+    const all = this.getStoredOrders();
+    return all.filter((o) => o.shopId === shopId);
+  },
+
+  async getActiveOrders(shopId: string): Promise<Order[]> {
+    await new Promise((r) => setTimeout(r, 30));
+    const all = this.getStoredOrders();
+    return all.filter(
+      (o) =>
+        o.shopId === shopId &&
+        (o.orderStatus === 'PENDING' ||
+          o.orderStatus === 'ACCEPTED' ||
+          o.orderStatus === 'PREPARING' ||
+          o.orderStatus === 'READY')
+    );
+  },
+
+  async getOrderHistory(shopId: string, filter: 'TODAY' | 'YESTERDAY' | 'ALL' = 'TODAY'): Promise<Order[]> {
     await new Promise((r) => setTimeout(r, 40));
+    const all = this.getStoredOrders();
+    return all.filter((o) => o.shopId === shopId && (o.orderStatus === 'COMPLETED' || o.orderStatus === 'CANCELLED'));
+  },
+
+  async getOrder(orderId: string): Promise<Order | null> {
+    await new Promise((r) => setTimeout(r, 30));
     const orders = this.getStoredOrders();
     return orders.find((o) => o.id === orderId) || null;
+  },
+
+  async acceptOrder(orderId: string): Promise<Order | null> {
+    return this.updateOrderStatus(orderId, 'ACCEPTED');
+  },
+
+  async startPreparing(orderId: string): Promise<Order | null> {
+    return this.updateOrderStatus(orderId, 'PREPARING');
+  },
+
+  async markReady(orderId: string): Promise<Order | null> {
+    return this.updateOrderStatus(orderId, 'READY');
+  },
+
+  async completeOrder(orderId: string): Promise<Order | null> {
+    return this.updateOrderStatus(orderId, 'COMPLETED');
+  },
+
+  async rejectOrder(orderId: string, reason?: string): Promise<Order | null> {
+    const orders = this.getStoredOrders();
+    const index = orders.findIndex((o) => o.id === orderId);
+    if (index === -1) return null;
+
+    const order = {
+      ...orders[index],
+      orderStatus: 'CANCELLED' as OrderStatus,
+      cancellationReason: reason || 'Item unavailable or stall closed',
+      updatedAt: new Date().toISOString(),
+    };
+    orders[index] = order;
+    this.saveOrders(orders);
+    this.notifyOrderListeners(order);
+    this.notifyShopListeners(order.shopId);
+    return order;
+  },
+
+  async markPaymentPaid(orderId: string): Promise<Order | null> {
+    const orders = this.getStoredOrders();
+    const index = orders.findIndex((o) => o.id === orderId);
+    if (index === -1) return null;
+
+    const order = {
+      ...orders[index],
+      paymentStatus: 'PAID' as const,
+      updatedAt: new Date().toISOString(),
+    };
+    orders[index] = order;
+    this.saveOrders(orders);
+    this.notifyOrderListeners(order);
+    this.notifyShopListeners(order.shopId);
+    return order;
   },
 
   async createOrder(data: {
@@ -59,11 +136,11 @@ export const orderService = {
     estimatedPreparationMinutes: string;
     instructions?: string;
   }): Promise<Order> {
-    await new Promise((r) => setTimeout(r, 120));
+    await new Promise((r) => setTimeout(r, 60));
     const orders = this.getStoredOrders();
 
-    // Generate token number (random realistic 3-digit counter token)
-    const tokenInt = Math.floor(120 + Math.random() * 80);
+    // Generate token number
+    const tokenInt = Math.floor(144 + Math.random() * 40);
     const tokenNumber = `#${tokenInt}`;
 
     const newOrder: Order = {
@@ -72,9 +149,9 @@ export const orderService = {
       shopName: data.shopName,
       shopImage: data.shopImage,
       shopLocation: data.shopLocation,
-      customerId: 'cust-1',
-      customerName: data.customerName || 'Guest Customer',
-      customerPhone: data.customerPhone || '+91 98765 00000',
+      customerId: 'cust-user',
+      customerName: data.customerName || 'Walk-in Customer',
+      customerPhone: data.customerPhone || '+91 98765 43210',
       tokenNumber,
       orderType: data.orderType,
       tableNumber: data.tableNumber,
@@ -92,6 +169,69 @@ export const orderService = {
     const updated = [newOrder, ...orders];
     this.saveOrders(updated);
     this.notifyOrderListeners(newOrder);
+    this.notifyShopListeners(data.shopId);
+
+    return newOrder;
+  },
+
+  async simulateIncomingOrder(shopId: string = 'sharma-vada-pav'): Promise<Order> {
+    const orders = this.getStoredOrders();
+    const tokenInt = Math.floor(150 + Math.random() * 40);
+    const tokenNumber = `#${tokenInt}`;
+
+    const sampleSets = [
+      {
+        items: [
+          { id: `it-${Date.now()}-1`, menuItemId: 'svp-1', name: 'Classic Mumbai Vada Pav', price: 20, quantity: 3, isVeg: true },
+          { id: `it-${Date.now()}-2`, menuItemId: 'svp-8', name: 'Special Cutting Chai', price: 15, quantity: 2, isVeg: true },
+        ],
+        type: 'TAKEAWAY' as const,
+        customerName: 'Aman Patel',
+        phone: '+91 98921 44556',
+        notes: 'Make it extra spicy with fried chillies!',
+      },
+      {
+        items: [
+          { id: `it-${Date.now()}-1`, menuItemId: 'svp-2', name: 'Cheese Burst Vada Pav', price: 35, quantity: 2, isVeg: true },
+          { id: `it-${Date.now()}-2`, menuItemId: 'svp-10', name: 'Fresh Lime Soda', price: 30, quantity: 1, isVeg: true },
+        ],
+        type: 'DINE_IN' as const,
+        tableNumber: 'Table 5',
+        customerName: 'Kavita Roy',
+        phone: '+91 98334 55667',
+        notes: 'Less sweet in lime soda please',
+      },
+    ];
+
+    const pick = sampleSets[Math.floor(Math.random() * sampleSets.length)];
+    const subtotal = pick.items.reduce((s, i) => s + i.price * i.quantity, 0);
+
+    const newOrder: Order = {
+      id: `ord-${Date.now().toString().slice(-6)}`,
+      shopId,
+      shopName: 'Sharma Vada Pav',
+      shopLocation: 'Gate 2, Andheri West Metro',
+      customerId: `cust-${Date.now()}`,
+      customerName: pick.customerName,
+      customerPhone: pick.phone,
+      tokenNumber,
+      orderType: pick.type,
+      tableNumber: pick.tableNumber,
+      paymentMethod: pick.type === 'DINE_IN' ? 'PAY_ONLINE' : 'CASH_AT_COUNTER',
+      paymentStatus: pick.type === 'DINE_IN' ? 'PAID' : 'COLLECT_ON_DELIVERY',
+      orderStatus: 'PENDING',
+      items: pick.items,
+      subtotal,
+      total: subtotal,
+      estimatedPreparationMinutes: '5',
+      createdAt: new Date().toISOString(),
+      instructions: pick.notes,
+    };
+
+    const updated = [newOrder, ...orders];
+    this.saveOrders(updated);
+    this.notifyOrderListeners(newOrder);
+    this.notifyShopListeners(shopId);
 
     return newOrder;
   },
@@ -101,7 +241,7 @@ export const orderService = {
     const index = orders.findIndex((o) => o.id === orderId);
     if (index === -1) return null;
 
-    const order = { ...orders[index], orderStatus: status };
+    const order = { ...orders[index], orderStatus: status, updatedAt: new Date().toISOString() };
     if (status === 'READY') {
       order.readyAt = new Date().toISOString();
     } else if (status === 'COMPLETED') {
@@ -111,31 +251,58 @@ export const orderService = {
     orders[index] = order;
     this.saveOrders(orders);
     this.notifyOrderListeners(order);
+    this.notifyShopListeners(order.shopId);
 
     return order;
   },
 
   subscribeToOrder(orderId: string, listener: (order: Order) => void): () => void {
-    if (!LISTENERS_MAP.has(orderId)) {
-      LISTENERS_MAP.set(orderId, new Set());
+    if (!ORDER_LISTENERS_MAP.has(orderId)) {
+      ORDER_LISTENERS_MAP.set(orderId, new Set());
     }
-    LISTENERS_MAP.get(orderId)!.add(listener);
+    ORDER_LISTENERS_MAP.get(orderId)!.add(listener);
 
     return () => {
-      const set = LISTENERS_MAP.get(orderId);
+      const set = ORDER_LISTENERS_MAP.get(orderId);
       if (set) {
         set.delete(listener);
         if (set.size === 0) {
-          LISTENERS_MAP.delete(orderId);
+          ORDER_LISTENERS_MAP.delete(orderId);
+        }
+      }
+    };
+  },
+
+  subscribeToShopOrders(shopId: string, listener: (orders: Order[]) => void): () => void {
+    if (!SHOP_ORDER_LISTENERS.has(shopId)) {
+      SHOP_ORDER_LISTENERS.set(shopId, new Set());
+    }
+    SHOP_ORDER_LISTENERS.get(shopId)!.add(listener);
+
+    return () => {
+      const set = SHOP_ORDER_LISTENERS.get(shopId);
+      if (set) {
+        set.delete(listener);
+        if (set.size === 0) {
+          SHOP_ORDER_LISTENERS.delete(shopId);
         }
       }
     };
   },
 
   notifyOrderListeners(order: Order): void {
-    const listeners = LISTENERS_MAP.get(order.id);
+    const listeners = ORDER_LISTENERS_MAP.get(order.id);
     if (listeners) {
       listeners.forEach((listener) => listener(order));
     }
   },
+
+  notifyShopListeners(shopId: string): void {
+    const listeners = SHOP_ORDER_LISTENERS.get(shopId);
+    if (listeners) {
+      const all = this.getStoredOrders().filter((o) => o.shopId === shopId);
+      listeners.forEach((listener) => listener(all));
+    }
+  },
 };
+

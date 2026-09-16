@@ -12,6 +12,7 @@ import { FloatingCartBar } from './components/common/FloatingCartBar';
 import { CartConflictModal } from './components/common/CartConflictModal';
 import { QRScanModal } from './components/common/QRScanModal';
 
+// Customer Views
 import { HomeView } from './views/HomeView';
 import { SearchView } from './views/SearchView';
 import { ShopsView } from './views/ShopsView';
@@ -23,12 +24,59 @@ import { OrdersHistoryView } from './views/OrdersHistoryView';
 import { SavedShopsView } from './views/SavedShopsView';
 import { ProfileView } from './views/ProfileView';
 
+// Business Ecosystem Views
+import { BusinessDashboardView } from './views/business/BusinessDashboardView';
+import { BusinessOrdersView } from './views/business/BusinessOrdersView';
+import { BusinessOrderDetailView } from './views/business/BusinessOrderDetailView';
+import { BusinessMenuView } from './views/business/BusinessMenuView';
+import { BusinessItemFormView } from './views/business/BusinessItemFormView';
+import { BusinessAvailabilityView } from './views/business/BusinessAvailabilityView';
+import { BusinessShopProfileView } from './views/business/BusinessShopProfileView';
+import { BusinessQRView } from './views/business/BusinessQRView';
+import { BusinessSalesView } from './views/business/BusinessSalesView';
+import { BusinessNotificationsView } from './views/business/BusinessNotificationsView';
+import { BusinessSettingsView } from './views/business/BusinessSettingsView';
+
 const AppContent: React.FC = () => {
   const { route } = useRouter();
   const [isQRScannerOpen, setIsQRScannerOpen] = useState(false);
 
-  // Render view based on route name
-  const renderView = () => {
+  const isBusinessRoute = route && route.name.startsWith('business-');
+
+  // If inside business dashboard ecosystem, render appropriate business view directly
+  if (isBusinessRoute) {
+    switch (route.name) {
+      case 'business-dashboard':
+        return <BusinessDashboardView />;
+      case 'business-orders':
+      case 'business-history':
+        return <BusinessOrdersView />;
+      case 'business-order-detail':
+        return <BusinessOrderDetailView />;
+      case 'business-menu':
+        return <BusinessMenuView />;
+      case 'business-menu-new':
+      case 'business-menu-edit':
+        return <BusinessItemFormView />;
+      case 'business-availability':
+        return <BusinessAvailabilityView />;
+      case 'business-shop':
+        return <BusinessShopProfileView />;
+      case 'business-qr':
+        return <BusinessQRView />;
+      case 'business-sales':
+        return <BusinessSalesView />;
+      case 'business-notifications':
+        return <BusinessNotificationsView />;
+      case 'business-settings':
+        return <BusinessSettingsView />;
+      default:
+        return <BusinessDashboardView />;
+    }
+  }
+
+  // Render customer views
+  const renderCustomerView = () => {
     const current = route || { name: 'home', path: '/', params: {} };
     switch (current.name) {
       case 'home':
@@ -63,7 +111,7 @@ const AppContent: React.FC = () => {
 
       {/* Main Page Area */}
       <main className="flex-1 w-full max-w-7xl mx-auto">
-        {renderView()}
+        {renderCustomerView()}
       </main>
 
       {/* Floating Quick Cart Bar (Hidden in Cart & Checkout Views) */}

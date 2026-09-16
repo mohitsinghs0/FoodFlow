@@ -94,6 +94,18 @@ export const Header: React.FC<HeaderProps> = ({ onOpenQRScanner }) => {
             <Heart className="w-4 h-4" />
           </button>
 
+          {/* Business / Stall Owner Switch Button */}
+          <button
+            id="merchant-mode-btn"
+            onClick={() => navigate('/business')}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-all shadow-xs"
+            title="Stall Owner Dashboard (Sharma Vada Pav)"
+          >
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="hidden sm:inline">Stall Dashboard</span>
+            <span className="sm:hidden">Stall</span>
+          </button>
+
           {/* Cart button */}
           <button
             id="quick-cart-btn"

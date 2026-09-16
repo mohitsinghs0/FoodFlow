@@ -193,6 +193,32 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onOpenQRScanner }) => 
           </div>
           <ChevronRight className="w-4 h-4 text-slate-400 group-hover:translate-x-0.5 transition-transform" />
         </button>
+
+        {/* Stall Owner Ecosystem Portal */}
+        <button
+          onClick={() => navigate('/business')}
+          className="w-full p-4 flex items-center justify-between text-left bg-slate-900 text-white hover:bg-slate-800 transition-colors group"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-slate-800 text-amber-400 flex items-center justify-center font-black">
+              FF
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h4 className="font-bold text-xs sm:text-sm text-white">
+                  Stall Owner Dashboard
+                </h4>
+                <span className="text-[10px] font-bold bg-amber-400 text-slate-950 px-1.5 py-0.2 rounded">
+                  Merchant Mode
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400">
+                Manage orders, Rush mode, live menu, & sales summary
+              </p>
+            </div>
+          </div>
+          <ChevronRight className="w-4 h-4 text-slate-400 group-hover:translate-x-0.5 transition-transform" />
+        </button>
       </div>
 
       {/* Brand Ethos / Product Vision Card */}

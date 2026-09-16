@@ -1,6 +1,89 @@
-import { OrderStatus } from '../types';
+import { BusinessNotification } from '../types';
+import { MOCK_NOTIFICATIONS } from '../data/mockData';
+
+const NOTIFICATIONS_STORAGE_KEY = 'foodflow_business_notifications';
 
 export const notificationService = {
+  getStoredNotifications(): BusinessNotification[] {
+    try {
+      const stored = localStorage.getItem(NOTIFICATIONS_STORAGE_KEY);
+      if (stored) {
+        return JSON.parse(stored);
+      }
+    } catch {
+      // fallback
+    }
+    return MOCK_NOTIFICATIONS;
+  },
+
+  saveNotifications(notifs: BusinessNotification[]): void {
+    try {
+      localStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(notifs));
+    } catch {
+      // fallback
+    }
+  },
+
+  async getNotifications(shopId: string = 'sharma-vada-pav'): Promise<BusinessNotification[]> {
+    await new Promise((r) => setTimeout(r, 40));
+    const all = this.getStoredNotifications();
+    return all.filter((n) => n.shopId === shopId);
+  },
+
+  async markAsRead(id: string): Promise<void> {
+    const all = this.getStoredNotifications();
+    const updated = all.map((n) => (n.id === id ? { ...n, isRead: true } : n));
+    this.saveNotifications(updated);
+  },
+
+  async markAllAsRead(shopId: string = 'sharma-vada-pav'): Promise<void> {
+    const all = this.getStoredNotifications();
+    const updated = all.map((n) => (n.shopId === shopId ? { ...n, isRead: true } : n));
+    this.saveNotifications(updated);
+  },
+
+  async addNotification(data: Omit<BusinessNotification, 'id' | 'createdAt' | 'isRead'>): Promise<BusinessNotification> {
+    const all = this.getStoredNotifications();
+    const newNotif: BusinessNotification = {
+      ...data,
+      id: `notif-${Date.now()}`,
+      isRead: false,
+      createdAt: new Date().toISOString(),
+    };
+    const updated = [newNotif, ...all];
+    this.saveNotifications(updated);
+    this.playNewOrderAlert();
+    return newNotif;
+  },
+
+  /**
+   * Play counter bell for incoming new orders
+   */
+  playNewOrderAlert(): void {
+    try {
+      const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      if (!AudioContextClass) return;
+      const ctx = new AudioContextClass();
+      const now = ctx.currentTime;
+
+      // Two-tone attention bell
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(659.25, now); // E5
+      osc.frequency.setValueAtTime(880, now + 0.12); // A5
+      gain.gain.setValueAtTime(0.4, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.6);
+    } catch {
+      // Audio context might be restricted
+    }
+  },
+
   /**
    * Play an audible notification chime when order is READY using Web Audio API
    */
@@ -81,3 +164,4 @@ export const notificationService = {
     }
   },
 };
+

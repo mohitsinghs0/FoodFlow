@@ -10,7 +10,21 @@ export type AppRoute =
   | 'order-tracker'
   | 'order-history'
   | 'saved'
-  | 'profile';
+  | 'profile'
+  // Business Owner Routes
+  | 'business-dashboard'
+  | 'business-orders'
+  | 'business-order-detail'
+  | 'business-history'
+  | 'business-menu'
+  | 'business-menu-new'
+  | 'business-menu-edit'
+  | 'business-availability'
+  | 'business-shop'
+  | 'business-qr'
+  | 'business-sales'
+  | 'business-notifications'
+  | 'business-settings';
 
 export interface RouteState {
   name: AppRoute;
@@ -32,6 +46,63 @@ const RouterContext = createContext<RouterContextType | undefined>(undefined);
 export function parsePath(pathname: string): RouteState {
   const clean = pathname.replace(/^#/, '').split('?')[0] || '/';
   
+  // Business Routes matching
+  if (clean === '/business' || clean === '/business/' || clean.startsWith('/business/dashboard')) {
+    return { name: 'business-dashboard', path: '/business', params: {} };
+  }
+
+  // /business/orders/:orderId
+  const bizOrderMatch = clean.match(/^\/business\/orders\/([^/]+)/);
+  if (bizOrderMatch && bizOrderMatch[1] !== '') {
+    return { name: 'business-order-detail', path: clean, params: { orderId: bizOrderMatch[1] } };
+  }
+
+  if (clean === '/business/orders') {
+    return { name: 'business-orders', path: '/business/orders', params: {} };
+  }
+
+  if (clean === '/business/history') {
+    return { name: 'business-history', path: '/business/history', params: {} };
+  }
+
+  if (clean === '/business/menu/new') {
+    return { name: 'business-menu-new', path: '/business/menu/new', params: {} };
+  }
+
+  const bizMenuEditMatch = clean.match(/^\/business\/menu\/([^/]+)/);
+  if (bizMenuEditMatch && bizMenuEditMatch[1] !== '') {
+    return { name: 'business-menu-edit', path: clean, params: { itemId: bizMenuEditMatch[1] } };
+  }
+
+  if (clean === '/business/menu') {
+    return { name: 'business-menu', path: '/business/menu', params: {} };
+  }
+
+  if (clean === '/business/availability') {
+    return { name: 'business-availability', path: '/business/availability', params: {} };
+  }
+
+  if (clean === '/business/shop') {
+    return { name: 'business-shop', path: '/business/shop', params: {} };
+  }
+
+  if (clean === '/business/qr') {
+    return { name: 'business-qr', path: '/business/qr', params: {} };
+  }
+
+  if (clean === '/business/sales') {
+    return { name: 'business-sales', path: '/business/sales', params: {} };
+  }
+
+  if (clean === '/business/notifications') {
+    return { name: 'business-notifications', path: '/business/notifications', params: {} };
+  }
+
+  if (clean === '/business/settings') {
+    return { name: 'business-settings', path: '/business/settings', params: {} };
+  }
+
+  // Customer Routes matching
   // Match /shop/:shopId
   const shopMatch = clean.match(/^\/shop\/([^/]+)/);
   if (shopMatch) {

@@ -22,6 +22,7 @@ export interface Shop {
   description: string;
   image: string;
   bannerImage: string;
+  contactPhone?: string;
   location: {
     address: string;
     landmark: string;
@@ -50,6 +51,8 @@ export interface MenuItem {
   isVeg: boolean;
   isBestseller?: boolean;
   preparationTimeMin?: number;
+  preparationMinutes?: string;
+  customizationOptions?: any[];
 }
 
 export interface CartItem {
@@ -68,8 +71,9 @@ export interface Cart {
 export type OrderType = 'TAKEAWAY' | 'DINE_IN';
 
 export type PaymentMethod = 'CASH_AT_COUNTER' | 'PAY_ONLINE';
+export type PaymentMode = PaymentMethod;
 
-export type PaymentStatus = 'PENDING' | 'PAID' | 'COLLECT_ON_DELIVERY';
+export type PaymentStatus = 'PENDING' | 'PAID' | 'COLLECT_ON_DELIVERY' | 'REFUNDED' | 'FAILED';
 
 export type OrderStatus = 
   | 'PENDING'
@@ -101,6 +105,7 @@ export interface Order {
   orderType: OrderType;
   tableNumber?: string;
   paymentMethod: PaymentMethod;
+  paymentMode?: PaymentMode;
   paymentStatus: PaymentStatus;
   orderStatus: OrderStatus;
   items: OrderItem[];
@@ -108,9 +113,56 @@ export interface Order {
   total: number;
   estimatedPreparationMinutes: string;
   createdAt: string;
+  updatedAt?: string;
   readyAt?: string;
   completedAt?: string;
   instructions?: string;
+  cancellationReason?: string;
+}
+
+export interface BusinessOwner {
+  id: string;
+  shopId: string;
+  name: string;
+  phone: string;
+  email?: string;
+  role: 'OWNER' | 'MANAGER' | 'STAFF';
+  upiId: string;
+}
+
+export interface BusinessNotification {
+  id: string;
+  shopId: string;
+  title: string;
+  message: string;
+  type: 'ORDER_NEW' | 'ORDER_READY' | 'PAYMENT' | 'ALERT' | 'INFO';
+  tokenNumber?: string;
+  orderId?: string;
+  amount?: number;
+  isRead: boolean;
+  createdAt: string;
+}
+
+export interface SalesSummary {
+  period: 'TODAY' | 'YESTERDAY' | 'THIS_WEEK' | 'THIS_MONTH';
+  totalOrders: number;
+  totalSales: number;
+  cashSales: number;
+  onlineSales: number;
+  averageOrderValue: number;
+  topSellingItems: {
+    name: string;
+    count: number;
+    revenue: number;
+  }[];
+}
+
+export interface BusinessSettings {
+  soundEnabled: boolean;
+  notificationsEnabled: boolean;
+  autoPrintReceipt: boolean;
+  rushMode: boolean;
+  isOnline: boolean;
 }
 
 export interface UserProfile {
