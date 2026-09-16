@@ -16,7 +16,7 @@ import {
 
 export const RegisterView: React.FC = () => {
   const { route, navigate } = useRouter();
-  const { registerCustomer, registerOwner } = useAuth();
+  const { registerCustomer, registerOwner, signInWithGoogle } = useAuth();
 
   const [roleTab, setRoleTab] = useState<'customer' | 'owner'>('customer');
   const [fullName, setFullName] = useState('');

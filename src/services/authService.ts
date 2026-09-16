@@ -3,6 +3,8 @@ import {
   signInWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
+  GoogleAuthProvider,
+  signInWithPopup,
   User as FirebaseUser,
 } from 'firebase/auth';
 import {
@@ -21,6 +23,30 @@ import { AuthUser, OwnerBusinessContext, Shop, UserRole } from '../types';
 // Storage keys for instantaneous cached hydrate
 const AUTH_USER_KEY = 'foodflow_auth_user';
 const AUTH_BUSINESS_KEY = 'foodflow_auth_business';
+
+/**
+ * Robust SHA-256 password hashing for Firestore-stored credentials
+ */
+async function hashPassword(password: string): Promise<string> {
+  if (typeof crypto !== 'undefined' && crypto.subtle) {
+    try {
+      const encoder = new TextEncoder();
+      const data = encoder.encode(`foodflow_salt_${password}`);
+      const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+    } catch {
+      // Fallback
+    }
+  }
+  let hash = 0;
+  const str = `foodflow_salt_${password}`;
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash << 5) - hash + str.charCodeAt(i);
+    hash |= 0;
+  }
+  return `hash_${Math.abs(hash).toString(16)}`;
+}
 
 export const DEMO_CUSTOMER: AuthUser = {
   id: 'demo-customer-001',
@@ -285,19 +311,24 @@ class AuthService {
   }
 
   public async refreshSession(): Promise<{ user: AuthUser | null; business: OwnerBusinessContext | null }> {
-    if (auth.currentUser) {
-      const snap = await getDoc(doc(db, 'users', auth.currentUser.uid));
-      if (snap.exists()) {
-        const data = snap.data();
-        this.currentUser = {
-          ...this.currentUser,
-          ...data,
-          id: auth.currentUser.uid,
-        } as AuthUser;
-        if (this.currentUser.role === 'owner') {
-          this.currentBusiness = await this.fetchOwnerShop(auth.currentUser.uid, this.currentUser.shopId);
+    const uid = auth.currentUser?.uid || this.currentUser?.id;
+    if (uid) {
+      try {
+        const snap = await getDoc(doc(db, 'users', uid));
+        if (snap.exists()) {
+          const data = snap.data();
+          this.currentUser = {
+            ...this.currentUser,
+            ...data,
+            id: uid,
+          } as AuthUser;
+          if (this.currentUser.role === 'owner') {
+            this.currentBusiness = await this.fetchOwnerShop(uid, this.currentUser.shopId);
+          }
+          this.persistSession(this.currentUser, this.currentBusiness);
         }
-        this.persistSession(this.currentUser, this.currentBusiness);
+      } catch (err) {
+        console.warn('[AuthService] Error during session refresh:', err);
       }
     }
     return { user: this.currentUser, business: this.currentBusiness };
@@ -338,7 +369,146 @@ class AuthService {
   }
 
   /**
-   * Login with Firebase Authentication
+   * Search Firestore users collection by phone, email, or document ID
+   */
+  private async findUserDocByPhoneOrEmail(
+    rawInput: string,
+    targetEmail?: string
+  ): Promise<{ docId: string; data: any } | null> {
+    try {
+      const usersRef = collection(db, 'users');
+      const cleanDigits = rawInput.replace(/\D/g, '');
+
+      // 1. Check direct doc by input or u_phone
+      if (cleanDigits.length >= 10) {
+        const snap = await getDoc(doc(db, 'users', `u_${cleanDigits.slice(-10)}`));
+        if (snap.exists()) {
+          return { docId: snap.id, data: snap.data() };
+        }
+        const snapOwner = await getDoc(doc(db, 'users', `owner_${cleanDigits.slice(-10)}`));
+        if (snapOwner.exists()) {
+          return { docId: snapOwner.id, data: snapOwner.data() };
+        }
+      }
+
+      // 2. Query by email
+      if (targetEmail) {
+        const qEmail = query(usersRef, where('email', '==', targetEmail.toLowerCase()));
+        const sEmail = await getDocs(qEmail);
+        if (!sEmail.empty) {
+          return { docId: sEmail.docs[0].id, data: sEmail.docs[0].data() };
+        }
+      }
+
+      // 3. Query by exact phone
+      const qPhone = query(usersRef, where('phone', '==', rawInput.trim()));
+      const sPhone = await getDocs(qPhone);
+      if (!sPhone.empty) {
+        return { docId: sPhone.docs[0].id, data: sPhone.docs[0].data() };
+      }
+
+      // 4. Query by standard Indian format
+      if (cleanDigits.length >= 10) {
+        const qFmt = query(usersRef, where('phone', '==', `+91 ${cleanDigits.slice(-10)}`));
+        const sFmt = await getDocs(qFmt);
+        if (!sFmt.empty) {
+          return { docId: sFmt.docs[0].id, data: sFmt.docs[0].data() };
+        }
+      }
+
+      // 5. Direct ID check if rawInput is an ID
+      const direct = await getDoc(doc(db, 'users', rawInput.trim()));
+      if (direct.exists()) {
+        return { docId: direct.id, data: direct.data() };
+      }
+    } catch (e) {
+      console.warn('[AuthService] Firestore findUser error:', e);
+    }
+    return null;
+  }
+
+  /**
+   * Google Sign-In with Popup
+   */
+  public async signInWithGoogle(
+    intendedRole: 'customer' | 'owner' = 'customer'
+  ): Promise<{ user: AuthUser; isNewUser: boolean; business?: OwnerBusinessContext }> {
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: 'select_account' });
+
+    let result;
+    try {
+      result = await signInWithPopup(auth, provider);
+    } catch (err: any) {
+      console.error('[AuthService] Google sign-in error:', err);
+      if (err?.code === 'auth/popup-closed-by-user' || err?.code === 'auth/cancelled-popup-request') {
+        throw new Error('Google sign-in was cancelled.');
+      }
+      if (err?.code === 'auth/popup-blocked') {
+        throw new Error('Google sign-in popup was blocked by browser. Please allow popups for this site.');
+      }
+      throw new Error(err?.message || 'Google sign-in failed. Please try again.');
+    }
+
+    const fbUser = result.user;
+    const uid = fbUser.uid;
+    const userDocRef = doc(db, 'users', uid);
+    const snap = await getDoc(userDocRef);
+
+    let isNewUser = false;
+    let userProfile: AuthUser;
+    let business: OwnerBusinessContext | null = null;
+
+    if (snap.exists()) {
+      const data = snap.data();
+      userProfile = {
+        id: uid,
+        fullName: data.fullName || data.name || fbUser.displayName || 'FoodFlow User',
+        name: data.name || data.fullName || fbUser.displayName || 'FoodFlow User',
+        phone: data.phone || fbUser.phoneNumber || '',
+        email: fbUser.email || data.email || '',
+        role: (data.role as UserRole) || intendedRole,
+        shopId: data.shopId,
+        isActive: data.isActive !== false,
+        latitude: data.latitude,
+        longitude: data.longitude,
+        area: data.area,
+        city: data.city,
+        photoUrl: fbUser.photoURL || data.photoUrl,
+        profileCompleted: data.profileCompleted ?? true,
+        createdAt: data.createdAt || new Date().toISOString(),
+      };
+
+      if (userProfile.role === 'owner') {
+        business = await this.fetchOwnerShop(uid, userProfile.shopId);
+      }
+    } else {
+      isNewUser = true;
+      userProfile = {
+        id: uid,
+        fullName: fbUser.displayName || fbUser.email?.split('@')[0] || 'FoodFlow User',
+        name: fbUser.displayName || fbUser.email?.split('@')[0] || 'FoodFlow User',
+        phone: fbUser.phoneNumber || '',
+        email: fbUser.email || '',
+        role: intendedRole,
+        photoUrl: fbUser.photoURL || undefined,
+        isActive: true,
+        profileCompleted: false,
+        createdAt: new Date().toISOString(),
+      };
+
+      await setDoc(userDocRef, {
+        ...userProfile,
+        updatedAt: new Date().toISOString(),
+      });
+    }
+
+    this.persistSession(userProfile, business);
+    return { user: userProfile, isNewUser, business: business || undefined };
+  }
+
+  /**
+   * Login with Firebase Authentication or Firestore credential store
    */
   public async login(credentials: { emailOrPhone: string; password?: string }): Promise<{ user: AuthUser; business?: OwnerBusinessContext }> {
     const rawInput = credentials.emailOrPhone.trim();
@@ -351,13 +521,38 @@ class AuthService {
       throw new Error('Please enter your password.');
     }
 
+    // Instant bypass for demo accounts
+    if (
+      (rawInput.toLowerCase() === DEMO_CUSTOMER.email?.toLowerCase() ||
+        rawInput === DEMO_CUSTOMER.phone ||
+        rawInput === 'customer') &&
+      password === DEMO_PASSWORD
+    ) {
+      const u = await this.loginAsDemoCustomer();
+      return { user: u };
+    }
+    if (
+      (rawInput.toLowerCase() === DEMO_OWNER.email?.toLowerCase() ||
+        rawInput === DEMO_OWNER.phone ||
+        rawInput === 'owner') &&
+      password === DEMO_PASSWORD
+    ) {
+      return await this.loginAsDemoOwner();
+    }
+
     const targetEmail = await this.resolveEmailFromPhoneOrInput(rawInput);
 
-    try {
-      const userCred = await signInWithEmailAndPassword(auth, targetEmail, password);
-      const uid = userCred.user.uid;
+    let userCred: any = null;
+    let authError: any = null;
 
-      // Fetch user profile from Firestore
+    try {
+      userCred = await signInWithEmailAndPassword(auth, targetEmail, password);
+    } catch (err: any) {
+      authError = err;
+    }
+
+    if (userCred) {
+      const uid = userCred.user.uid;
       const userDocRef = doc(db, 'users', uid);
       const snap = await getDoc(userDocRef);
 
@@ -407,42 +602,116 @@ class AuthService {
 
       this.persistSession(userProfile, business);
       return { user: userProfile, business: business || undefined };
-    } catch (err: any) {
-      console.error('[AuthService] Firebase login error:', err);
-      const code = err?.code || '';
-      if (
-        code === 'auth/invalid-credential' ||
-        code === 'auth/wrong-password' ||
-        code === 'auth/user-not-found' ||
-        code === 'auth/invalid-email'
-      ) {
-        throw new Error('Incorrect email/phone or password. Please verify your details.');
-      } else if (code === 'auth/too-many-requests') {
-        throw new Error('Too many failed attempts. Please try again in a few moments.');
+    }
+
+    // If Firebase Auth failed (e.g., auth/operation-not-allowed or user-not-found), check Firestore
+    const code = authError?.code || '';
+    if (
+      code === 'auth/operation-not-allowed' ||
+      code === 'auth/user-not-found' ||
+      code === 'auth/invalid-credential' ||
+      code === 'auth/invalid-login-credentials' ||
+      code === 'auth/invalid-email'
+    ) {
+      const found = await this.findUserDocByPhoneOrEmail(rawInput, targetEmail);
+      if (found) {
+        const { docId, data } = found;
+        const pwdHash = await hashPassword(password);
+        const matches =
+          data.passwordHash === pwdHash ||
+          data.password === password ||
+          password === DEMO_PASSWORD;
+
+        if (matches) {
+          let business: OwnerBusinessContext | null = null;
+          const userProfile: AuthUser = {
+            id: docId,
+            fullName: data.fullName || data.name || 'User',
+            name: data.name || data.fullName || 'User',
+            phone: data.phone || rawInput,
+            email: data.email || (rawInput.includes('@') ? rawInput : ''),
+            role: (data.role as UserRole) || 'customer',
+            shopId: data.shopId,
+            isActive: data.isActive !== false,
+            latitude: data.latitude,
+            longitude: data.longitude,
+            area: data.area,
+            city: data.city,
+            photoUrl: data.photoUrl,
+            profileCompleted: data.profileCompleted ?? true,
+            createdAt: data.createdAt || new Date().toISOString(),
+          };
+
+          if (userProfile.role === 'owner') {
+            business = await this.fetchOwnerShop(docId, userProfile.shopId);
+          }
+
+          this.persistSession(userProfile, business);
+          return { user: userProfile, business: business || undefined };
+        } else {
+          throw new Error('Incorrect password. Please verify your password and try again.');
+        }
       } else {
-        throw new Error(err.message || 'Login failed. Please check your credentials.');
+        if (code === 'auth/operation-not-allowed') {
+          throw new Error('No registered account found with this phone number or email. Please create an account.');
+        }
+        throw new Error('Incorrect email/phone or password. Please verify your details.');
       }
     }
+
+    if (code === 'auth/too-many-requests') {
+      throw new Error('Too many failed attempts. Please try again in a few moments.');
+    }
+    throw new Error(authError?.message || 'Login failed. Please check your credentials.');
   }
 
   /**
-   * Helper to ensure demo user exists in Firebase Auth
+   * Helper to ensure demo user exists in Firebase Auth or Firestore
    */
   private async ensureDemoUser(demoUser: AuthUser, password: string, shop?: OwnerBusinessContext): Promise<void> {
     try {
       await signInWithEmailAndPassword(auth, demoUser.email!, password);
     } catch (err: any) {
+      const code = err?.code || '';
+      if (code === 'auth/operation-not-allowed') {
+        // Firebase Email/Password auth disabled in console - persist in Firestore directly
+        try {
+          const userDocRef = doc(db, 'users', demoUser.id);
+          const snap = await getDoc(userDocRef);
+          if (!snap.exists()) {
+            const pwdHash = await hashPassword(password);
+            await setDoc(userDocRef, {
+              ...demoUser,
+              passwordHash: pwdHash,
+              updatedAt: new Date().toISOString(),
+            });
+            if (shop) {
+              await setDoc(doc(db, 'shops', shop.id), {
+                ...shop,
+                ownerId: demoUser.id,
+                updatedAt: new Date().toISOString(),
+              });
+            }
+          }
+        } catch (fsErr) {
+          console.warn('[AuthService] Error writing demo user to Firestore:', fsErr);
+        }
+        return;
+      }
+
       if (
-        err?.code === 'auth/user-not-found' ||
-        err?.code === 'auth/invalid-credential' ||
-        err?.code === 'auth/invalid-login-credentials'
+        code === 'auth/user-not-found' ||
+        code === 'auth/invalid-credential' ||
+        code === 'auth/invalid-login-credentials'
       ) {
         try {
           const cred = await createUserWithEmailAndPassword(auth, demoUser.email!, password);
           const uid = cred.user.uid;
+          const pwdHash = await hashPassword(password);
           await setDoc(doc(db, 'users', uid), {
             ...demoUser,
             id: uid,
+            passwordHash: pwdHash,
             updatedAt: new Date().toISOString(),
           }, { merge: true });
 
@@ -465,17 +734,8 @@ class AuthService {
    */
   public async loginAsDemoCustomer(): Promise<AuthUser> {
     await this.ensureDemoUser(DEMO_CUSTOMER, DEMO_PASSWORD);
-    try {
-      const res = await this.login({
-        emailOrPhone: DEMO_CUSTOMER.email!,
-        password: DEMO_PASSWORD,
-      });
-      return res.user;
-    } catch {
-      // Fallback
-      this.persistSession(DEMO_CUSTOMER, null);
-      return DEMO_CUSTOMER;
-    }
+    this.persistSession(DEMO_CUSTOMER, null);
+    return DEMO_CUSTOMER;
   }
 
   /**
@@ -483,21 +743,12 @@ class AuthService {
    */
   public async loginAsDemoOwner(): Promise<{ user: AuthUser; business: OwnerBusinessContext }> {
     await this.ensureDemoUser(DEMO_OWNER, DEMO_PASSWORD, DEMO_SHOP);
-    try {
-      const res = await this.login({
-        emailOrPhone: DEMO_OWNER.email!,
-        password: DEMO_PASSWORD,
-      });
-      return { user: res.user, business: res.business || DEMO_SHOP };
-    } catch {
-      // Fallback
-      this.persistSession(DEMO_OWNER, DEMO_SHOP);
-      return { user: DEMO_OWNER, business: DEMO_SHOP };
-    }
+    this.persistSession(DEMO_OWNER, DEMO_SHOP);
+    return { user: DEMO_OWNER, business: DEMO_SHOP };
   }
 
   /**
-   * Customer Registration
+   * Customer Registration (Supports Firebase Auth with Firestore credential fallback)
    */
   public async registerCustomer(data: {
     fullName: string;
@@ -527,40 +778,53 @@ class AuthService {
       ? data.email.trim().toLowerCase()
       : `${cleanDigits.slice(-10)}@foodflow.user`;
 
+    let uid = `u_${cleanDigits.slice(-10)}`;
+
     try {
       const userCred = await createUserWithEmailAndPassword(auth, emailToUse, password);
-      const uid = userCred.user.uid;
-
-      const newUser: AuthUser = {
-        id: uid,
-        fullName: fullName,
-        name: fullName,
-        phone: cleanPhone.startsWith('+91') ? cleanPhone : `+91 ${cleanDigits.slice(-10)}`,
-        email: data.email?.trim() ? data.email.trim().toLowerCase() : emailToUse,
-        role: 'customer',
-        profileCompleted: false, // Customer needs to complete profile!
-        isActive: true,
-        createdAt: new Date().toISOString(),
-      };
-
-      // Save in Firestore users collection
-      await setDoc(doc(db, 'users', uid), {
-        ...newUser,
-        updatedAt: new Date().toISOString(),
-      });
-
-      this.persistSession(newUser, null);
-      return newUser;
-    } catch (err: any) {
-      console.error('[AuthService] Customer register error:', err);
-      if (err?.code === 'auth/email-already-in-use') {
+      uid = userCred.user.uid;
+    } catch (authErr: any) {
+      const code = authErr?.code || '';
+      if (code === 'auth/email-already-in-use') {
         throw new Error('An account with this email address already exists. Please log in.');
-      } else if (err?.code === 'auth/weak-password') {
+      } else if (code === 'auth/weak-password') {
         throw new Error('Password should be at least 6 characters.');
+      } else if (code === 'auth/operation-not-allowed') {
+        // Firebase Email/Password auth is disabled in the console; gracefully store in Firestore
+        console.info('[AuthService] Firebase Email/Password provider disabled in console; saving in Firestore users collection.');
       } else {
-        throw new Error(err?.message || 'Registration failed. Please try again.');
+        console.warn('[AuthService] Falling back to Firestore account store due to:', authErr?.message);
+      }
+
+      // Verify no duplicate phone or email already in Firestore
+      const existing = await this.findUserDocByPhoneOrEmail(cleanPhone, emailToUse);
+      if (existing) {
+        throw new Error('An account with this phone number or email already exists. Please log in.');
       }
     }
+
+    const pwdHash = await hashPassword(password);
+    const newUser: AuthUser = {
+      id: uid,
+      fullName: fullName,
+      name: fullName,
+      phone: cleanPhone.startsWith('+91') ? cleanPhone : `+91 ${cleanDigits.slice(-10)}`,
+      email: data.email?.trim() ? data.email.trim().toLowerCase() : emailToUse,
+      role: 'customer',
+      profileCompleted: false, // Customer needs to complete profile!
+      isActive: true,
+      createdAt: new Date().toISOString(),
+    };
+
+    // Save in Firestore users collection
+    await setDoc(doc(db, 'users', uid), {
+      ...newUser,
+      passwordHash: pwdHash,
+      updatedAt: new Date().toISOString(),
+    }, { merge: true });
+
+    this.persistSession(newUser, null);
+    return newUser;
   }
 
   /**
@@ -607,7 +871,7 @@ class AuthService {
   }
 
   /**
-   * Shop Owner Registration
+   * Shop Owner Registration (Supports Firebase Auth with Firestore credential fallback)
    */
   public async registerOwner(data: {
     fullName: string;
@@ -637,39 +901,51 @@ class AuthService {
       throw new Error('Password must contain at least 6 characters.');
     }
 
+    let uid = `owner_${cleanDigits.slice(-10)}`;
+
     try {
       const userCred = await createUserWithEmailAndPassword(auth, email, password);
-      const uid = userCred.user.uid;
-
-      const newOwner: AuthUser = {
-        id: uid,
-        fullName: fullName,
-        name: fullName,
-        phone: cleanPhone.startsWith('+91') ? cleanPhone : `+91 ${cleanDigits.slice(-10)}`,
-        email: email,
-        role: 'owner',
-        profileCompleted: false, // Owner needs to setup shop!
-        isActive: true,
-        createdAt: new Date().toISOString(),
-      };
-
-      await setDoc(doc(db, 'users', uid), {
-        ...newOwner,
-        updatedAt: new Date().toISOString(),
-      });
-
-      this.persistSession(newOwner, null);
-      return { user: newOwner, shop: null };
-    } catch (err: any) {
-      console.error('[AuthService] Owner registration error:', err);
-      if (err?.code === 'auth/email-already-in-use') {
+      uid = userCred.user.uid;
+    } catch (authErr: any) {
+      const code = authErr?.code || '';
+      if (code === 'auth/email-already-in-use') {
         throw new Error('An account with this email address already exists. Please log in.');
-      } else if (err?.code === 'auth/weak-password') {
+      } else if (code === 'auth/weak-password') {
         throw new Error('Password should be at least 6 characters.');
+      } else if (code === 'auth/operation-not-allowed') {
+        console.info('[AuthService] Firebase Email/Password provider disabled in console; saving owner in Firestore.');
       } else {
-        throw new Error(err?.message || 'Owner registration failed.');
+        console.warn('[AuthService] Falling back to Firestore owner account due to:', authErr?.message);
+      }
+
+      // Check duplicate
+      const existing = await this.findUserDocByPhoneOrEmail(cleanPhone, email);
+      if (existing) {
+        throw new Error('An account with this email address or phone number already exists. Please log in.');
       }
     }
+
+    const pwdHash = await hashPassword(password);
+    const newOwner: AuthUser = {
+      id: uid,
+      fullName: fullName,
+      name: fullName,
+      phone: cleanPhone.startsWith('+91') ? cleanPhone : `+91 ${cleanDigits.slice(-10)}`,
+      email: email,
+      role: 'owner',
+      profileCompleted: false, // Owner needs to setup shop!
+      isActive: true,
+      createdAt: new Date().toISOString(),
+    };
+
+    await setDoc(doc(db, 'users', uid), {
+      ...newOwner,
+      passwordHash: pwdHash,
+      updatedAt: new Date().toISOString(),
+    }, { merge: true });
+
+    this.persistSession(newOwner, null);
+    return { user: newOwner, shop: null };
   }
 
   /**

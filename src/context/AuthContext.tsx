@@ -11,6 +11,7 @@ interface AuthContextType {
   currentBusiness: OwnerBusinessContext | null;
   activeShopId: string;
   login: (emailOrPhone: string, password?: string) => Promise<AuthUser>;
+  signInWithGoogle: (intendedRole?: 'customer' | 'owner') => Promise<{ user: AuthUser; isNewUser: boolean }>;
   loginAsDemoCustomer: () => Promise<AuthUser>;
   loginAsDemoOwner: () => Promise<AuthUser>;
   registerCustomer: (data: {
@@ -97,6 +98,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIsLoading(false);
     }
   }, []);
+
+  const signInWithGoogle = useCallback(
+    async (intendedRole: 'customer' | 'owner' = 'customer'): Promise<{ user: AuthUser; isNewUser: boolean }> => {
+      setIsLoading(true);
+      try {
+        const res = await authService.signInWithGoogle(intendedRole);
+        setCurrentUser(res.user);
+        setCurrentBusiness(res.business || null);
+        return { user: res.user, isNewUser: res.isNewUser };
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    []
+  );
 
   const loginAsDemoCustomer = useCallback(async (): Promise<AuthUser> => {
     setIsLoading(true);
@@ -271,6 +287,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     currentBusiness,
     activeShopId,
     login,
+    signInWithGoogle,
     loginAsDemoCustomer,
     loginAsDemoOwner,
     registerCustomer,
