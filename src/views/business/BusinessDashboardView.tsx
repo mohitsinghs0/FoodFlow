@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from '../../context/RouterContext';
+import { useAuth } from '../../context/AuthContext';
 import { BusinessLayout } from '../../components/business/BusinessLayout';
 import { OrderCard } from '../../components/business/OrderCard';
 import { RushModeView } from '../../components/business/RushModeView';
@@ -28,6 +29,9 @@ import { Order, SalesSummary, Shop } from '../../types';
 
 export const BusinessDashboardView: React.FC = () => {
   const { navigate } = useRouter();
+  const { activeShopId, currentBusiness } = useAuth();
+  const targetShopId = activeShopId || currentBusiness?.id || 'demo-shop-001';
+
   const [shop, setShop] = useState<Shop | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [sales, setSales] = useState<SalesSummary | null>(null);
@@ -38,9 +42,9 @@ export const BusinessDashboardView: React.FC = () => {
   const loadData = async () => {
     try {
       const [shopData, allOrders, salesSummary] = await Promise.all([
-        shopService.getShop('sharma-vada-pav'),
-        orderService.getShopOrders('sharma-vada-pav'),
-        salesService.getTodaySales('sharma-vada-pav'),
+        shopService.getShop(targetShopId),
+        orderService.getShopOrders(targetShopId),
+        salesService.getTodaySales(targetShopId),
       ]);
       setShop(shopData);
       setOrders(allOrders);
@@ -54,18 +58,18 @@ export const BusinessDashboardView: React.FC = () => {
     loadData();
 
     // Subscribe to real-time order updates
-    const unsub = orderRealtimeService.subscribeToShop('sharma-vada-pav', (updatedOrders) => {
+    const unsub = orderRealtimeService.subscribeToShop(targetShopId, (updatedOrders) => {
       setOrders(updatedOrders);
-      salesService.getTodaySales('sharma-vada-pav').then(setSales);
+      salesService.getTodaySales(targetShopId).then(setSales);
     });
 
     return () => unsub();
-  }, []);
+  }, [targetShopId]);
 
   const handleSimulateOrder = async () => {
     setSimulating(true);
     try {
-      await orderRealtimeService.simulateIncomingOrder('sharma-vada-pav');
+      await orderRealtimeService.simulateIncomingOrder(targetShopId);
       await loadData();
     } finally {
       setSimulating(false);

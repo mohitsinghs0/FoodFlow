@@ -11,6 +11,8 @@ export type AppRoute =
   | 'order-history'
   | 'saved'
   | 'profile'
+  | 'login'
+  | 'register'
   // Business Owner Routes
   | 'business-dashboard'
   | 'business-orders'
@@ -44,62 +46,72 @@ interface RouterContextType {
 const RouterContext = createContext<RouterContextType | undefined>(undefined);
 
 export function parsePath(pathname: string): RouteState {
-  const clean = pathname.replace(/^#/, '').split('?')[0] || '/';
+  const [cleanPart, queryPart] = pathname.replace(/^#/, '').split('?');
+  const clean = cleanPart || '/';
+  
+  const queryParams: Record<string, string> = {};
+  if (queryPart) {
+    const searchParams = new URLSearchParams(queryPart);
+    searchParams.forEach((val, key) => {
+      queryParams[key] = val;
+    });
+  }
+  const params = { ...queryParams };
   
   // Business Routes matching
   if (clean === '/business' || clean === '/business/' || clean.startsWith('/business/dashboard')) {
-    return { name: 'business-dashboard', path: '/business', params: {} };
+    return { name: 'business-dashboard', path: '/business', params: { ...params } };
   }
 
   // /business/orders/:orderId
   const bizOrderMatch = clean.match(/^\/business\/orders\/([^/]+)/);
   if (bizOrderMatch && bizOrderMatch[1] !== '') {
-    return { name: 'business-order-detail', path: clean, params: { orderId: bizOrderMatch[1] } };
+    return { name: 'business-order-detail', path: clean, params: { ...params, orderId: bizOrderMatch[1] } };
   }
 
   if (clean === '/business/orders') {
-    return { name: 'business-orders', path: '/business/orders', params: {} };
+    return { name: 'business-orders', path: '/business/orders', params: { ...params } };
   }
 
   if (clean === '/business/history') {
-    return { name: 'business-history', path: '/business/history', params: {} };
+    return { name: 'business-history', path: '/business/history', params: { ...params } };
   }
 
   if (clean === '/business/menu/new') {
-    return { name: 'business-menu-new', path: '/business/menu/new', params: {} };
+    return { name: 'business-menu-new', path: '/business/menu/new', params: { ...params } };
   }
 
   const bizMenuEditMatch = clean.match(/^\/business\/menu\/([^/]+)/);
   if (bizMenuEditMatch && bizMenuEditMatch[1] !== '') {
-    return { name: 'business-menu-edit', path: clean, params: { itemId: bizMenuEditMatch[1] } };
+    return { name: 'business-menu-edit', path: clean, params: { ...params, itemId: bizMenuEditMatch[1] } };
   }
 
   if (clean === '/business/menu') {
-    return { name: 'business-menu', path: '/business/menu', params: {} };
+    return { name: 'business-menu', path: '/business/menu', params: { ...params } };
   }
 
   if (clean === '/business/availability') {
-    return { name: 'business-availability', path: '/business/availability', params: {} };
+    return { name: 'business-availability', path: '/business/availability', params: { ...params } };
   }
 
   if (clean === '/business/shop') {
-    return { name: 'business-shop', path: '/business/shop', params: {} };
+    return { name: 'business-shop', path: '/business/shop', params: { ...params } };
   }
 
   if (clean === '/business/qr') {
-    return { name: 'business-qr', path: '/business/qr', params: {} };
+    return { name: 'business-qr', path: '/business/qr', params: { ...params } };
   }
 
   if (clean === '/business/sales') {
-    return { name: 'business-sales', path: '/business/sales', params: {} };
+    return { name: 'business-sales', path: '/business/sales', params: { ...params } };
   }
 
   if (clean === '/business/notifications') {
-    return { name: 'business-notifications', path: '/business/notifications', params: {} };
+    return { name: 'business-notifications', path: '/business/notifications', params: { ...params } };
   }
 
   if (clean === '/business/settings') {
-    return { name: 'business-settings', path: '/business/settings', params: {} };
+    return { name: 'business-settings', path: '/business/settings', params: { ...params } };
   }
 
   // Customer Routes matching
@@ -109,7 +121,7 @@ export function parsePath(pathname: string): RouteState {
     return {
       name: 'shop-detail',
       path: clean,
-      params: { shopId: shopMatch[1] },
+      params: { ...params, shopId: shopMatch[1] },
     };
   }
 
@@ -119,39 +131,47 @@ export function parsePath(pathname: string): RouteState {
     return {
       name: 'order-tracker',
       path: clean,
-      params: { orderId: orderMatch[1] },
+      params: { ...params, orderId: orderMatch[1] },
     };
   }
 
   if (clean === '/orders') {
-    return { name: 'order-history', path: '/orders', params: {} };
+    return { name: 'order-history', path: '/orders', params: { ...params } };
   }
 
   if (clean === '/search') {
-    return { name: 'search', path: '/search', params: {} };
+    return { name: 'search', path: '/search', params: { ...params } };
   }
 
   if (clean === '/shops') {
-    return { name: 'shops', path: '/shops', params: {} };
+    return { name: 'shops', path: '/shops', params: { ...params } };
   }
 
   if (clean === '/cart') {
-    return { name: 'cart', path: '/cart', params: {} };
+    return { name: 'cart', path: '/cart', params: { ...params } };
   }
 
   if (clean === '/checkout') {
-    return { name: 'checkout', path: '/checkout', params: {} };
+    return { name: 'checkout', path: '/checkout', params: { ...params } };
   }
 
   if (clean === '/saved') {
-    return { name: 'saved', path: '/saved', params: {} };
+    return { name: 'saved', path: '/saved', params: { ...params } };
   }
 
   if (clean === '/profile') {
-    return { name: 'profile', path: '/profile', params: {} };
+    return { name: 'profile', path: '/profile', params: { ...params } };
   }
 
-  return { name: 'home', path: '/', params: {} };
+  if (clean === '/login') {
+    return { name: 'login', path: '/login', params: { ...params } };
+  }
+
+  if (clean === '/register') {
+    return { name: 'register', path: '/register', params: { ...params } };
+  }
+
+  return { name: 'home', path: '/', params: { ...params } };
 }
 
 export const RouterProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {

@@ -1,7 +1,21 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useRouter } from '../../context/RouterContext';
 import { useCart } from '../../context/CartContext';
-import { QrCode, MapPin, ShoppingBag, Search, ChevronRight, Heart } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
+import { 
+  QrCode, 
+  MapPin, 
+  ShoppingBag, 
+  Search, 
+  ChevronRight, 
+  Heart, 
+  LogIn, 
+  User, 
+  LogOut, 
+  Store,
+  Receipt,
+  UserPlus
+} from 'lucide-react';
 
 interface HeaderProps {
   onOpenQRScanner: () => void;
@@ -10,6 +24,26 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({ onOpenQRScanner }) => {
   const { route, navigate } = useRouter();
   const { totalItems } = useCart();
+  const { currentUser, isAuthenticated, currentBusiness, logout } = useAuth();
+  const [userDropdownOpen, setUserDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setUserDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleLogout = async () => {
+    setUserDropdownOpen(false);
+    await logout();
+    navigate('/');
+  };
 
   return (
     <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200">
@@ -80,7 +114,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenQRScanner }) => {
             <Search className="w-4 h-4" />
           </button>
 
-          {/* Saved Shops */}
+          {/* Saved Shops (For authenticated Customers or quick access) */}
           <button
             id="quick-saved-btn"
             onClick={() => navigate('/saved')}
@@ -90,23 +124,12 @@ export const Header: React.FC<HeaderProps> = ({ onOpenQRScanner }) => {
                 : 'border-slate-200 bg-white hover:bg-slate-50'
             }`}
             aria-label="Saved shops"
+            title="Saved Stalls"
           >
             <Heart className="w-4 h-4" />
           </button>
 
-          {/* Business / Stall Owner Switch Button */}
-          <button
-            id="merchant-mode-btn"
-            onClick={() => navigate('/business')}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-all shadow-xs"
-            title="Stall Owner Dashboard (Sharma Vada Pav)"
-          >
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="hidden sm:inline">Stall Dashboard</span>
-            <span className="sm:hidden">Stall</span>
-          </button>
-
-          {/* Cart button */}
+          {/* Cart Button */}
           <button
             id="quick-cart-btn"
             onClick={() => navigate('/cart')}
@@ -120,6 +143,174 @@ export const Header: React.FC<HeaderProps> = ({ onOpenQRScanner }) => {
               </span>
             )}
           </button>
+
+          {/* Dynamic Auth & Role-Based Navigation Area */}
+          {!isAuthenticated || !currentUser ? (
+            // UNAUTHENTICATED STATE: Login & Register Links
+            <div className="flex items-center gap-1.5">
+              <button
+                id="header-login-btn"
+                onClick={() => navigate('/login')}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold transition-all"
+              >
+                <LogIn className="w-3.5 h-3.5 text-slate-500" />
+                <span>Sign In</span>
+              </button>
+
+              <button
+                id="header-register-btn"
+                onClick={() => navigate('/register')}
+                className="hidden sm:flex items-center gap-1 px-3 py-2 rounded-xl bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold shadow-xs shadow-orange-500/20 transition-all"
+              >
+                <UserPlus className="w-3.5 h-3.5" />
+                <span>Register</span>
+              </button>
+            </div>
+          ) : currentUser.role === 'owner' ? (
+            // OWNER AUTHENTICATED STATE: Stall Dashboard & Owner Controls
+            <div className="relative" ref={dropdownRef}>
+              <button
+                id="header-owner-badge"
+                onClick={() => setUserDropdownOpen(!userDropdownOpen)}
+                className="flex items-center gap-2 pl-2.5 pr-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-all shadow-xs"
+              >
+                <Store className="w-3.5 h-3.5 text-orange-400" />
+                <span className="truncate max-w-[110px] sm:max-w-[150px]">
+                  {currentBusiness?.name || 'Stall Owner'}
+                </span>
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+              </button>
+
+              {userDropdownOpen && (
+                <div className="absolute right-0 mt-2 w-56 rounded-2xl bg-white border border-slate-200 shadow-xl py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+                  <div className="px-4 py-2 border-b border-slate-100">
+                    <div className="text-[10px] font-bold text-orange-600 uppercase tracking-wider">
+                      Stall Owner Account
+                    </div>
+                    <div className="font-bold text-xs text-slate-900 truncate">
+                      {currentUser.fullName}
+                    </div>
+                    <div className="text-[11px] text-slate-500 truncate">
+                      {currentBusiness?.name || 'My Stall'}
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      setUserDropdownOpen(false);
+                      navigate('/business');
+                    }}
+                    className="w-full px-4 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                  >
+                    <Store className="w-3.5 h-3.5 text-slate-400" />
+                    <span>Owner Dashboard</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setUserDropdownOpen(false);
+                      navigate('/business/orders');
+                    }}
+                    className="w-full px-4 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                  >
+                    <Receipt className="w-3.5 h-3.5 text-slate-400" />
+                    <span>Live Counter Orders</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setUserDropdownOpen(false);
+                      navigate('/');
+                    }}
+                    className="w-full px-4 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2 border-t border-slate-100"
+                  >
+                    <span>View Customer Web App</span>
+                  </button>
+
+                  <button
+                    onClick={handleLogout}
+                    className="w-full px-4 py-2 text-left text-xs font-bold text-rose-600 hover:bg-rose-50 flex items-center gap-2 border-t border-slate-100"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>Sign Out</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            // CUSTOMER AUTHENTICATED STATE: Profile Dropdown
+            <div className="relative" ref={dropdownRef}>
+              <button
+                id="header-user-menu-btn"
+                onClick={() => setUserDropdownOpen(!userDropdownOpen)}
+                className="flex items-center gap-2 p-1.5 sm:px-3 sm:py-1.5 rounded-xl border border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-50 transition-all text-left"
+              >
+                <div className="w-7 h-7 rounded-lg bg-orange-100 text-orange-700 flex items-center justify-center font-bold text-xs">
+                  {currentUser.fullName.charAt(0).toUpperCase()}
+                </div>
+                <div className="hidden sm:block text-left">
+                  <div className="text-xs font-bold text-slate-900 leading-none truncate max-w-[100px]">
+                    {currentUser.fullName}
+                  </div>
+                  <div className="text-[10px] text-slate-400 leading-tight">Customer</div>
+                </div>
+              </button>
+
+              {userDropdownOpen && (
+                <div className="absolute right-0 mt-2 w-52 rounded-2xl bg-white border border-slate-200 shadow-xl py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+                  <div className="px-4 py-2 border-b border-slate-100">
+                    <div className="font-bold text-xs text-slate-900 truncate">
+                      {currentUser.fullName}
+                    </div>
+                    <div className="text-[11px] text-slate-500 truncate">
+                      {currentUser.phone || currentUser.email}
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      setUserDropdownOpen(false);
+                      navigate('/profile');
+                    }}
+                    className="w-full px-4 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                  >
+                    <User className="w-3.5 h-3.5 text-slate-400" />
+                    <span>My Profile</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setUserDropdownOpen(false);
+                      navigate('/orders');
+                    }}
+                    className="w-full px-4 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                  >
+                    <Receipt className="w-3.5 h-3.5 text-slate-400" />
+                    <span>Order Tokens & History</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setUserDropdownOpen(false);
+                      navigate('/saved');
+                    }}
+                    className="w-full px-4 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                  >
+                    <Heart className="w-3.5 h-3.5 text-rose-500" />
+                    <span>Saved Stalls</span>
+                  </button>
+
+                  <button
+                    onClick={handleLogout}
+                    className="w-full px-4 py-2 text-left text-xs font-bold text-rose-600 hover:bg-rose-50 flex items-center gap-2 border-t border-slate-100"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>Sign Out</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </header>

@@ -173,3 +173,75 @@ export interface UserProfile {
   savedShopIds: string[];
   preferredLocation: string;
 }
+
+export type UserRole = 'customer' | 'owner' | 'admin';
+
+export interface AuthUser {
+  id: string;
+  fullName: string;
+  phone: string;
+  email?: string;
+  role: UserRole;
+  shopId?: string;
+  isActive?: boolean;
+  createdAt?: string;
+}
+
+export interface OwnerBusinessContext {
+  id: string;
+  name: string;
+  ownerId: string;
+  phone?: string;
+  address?: string;
+  stallType?: string;
+  isOpen?: boolean;
+  image?: string;
+  rating?: number;
+}
+
+export interface DatabaseUser {
+  id: string;
+  phone: string;
+  email?: string;
+  fullName?: string;
+  role: UserRole;
+  shopId?: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface OrderStatusHistory {
+  id: string;
+  orderId: string;
+  oldStatus: OrderStatus | null;
+  newStatus: OrderStatus;
+  changedBy?: string;
+  note?: string;
+  createdAt: string;
+}
+
+export interface PaymentRecord {
+  id: string;
+  orderId: string;
+  paymentMode: 'cash' | 'upi' | 'card' | PaymentMethod;
+  paymentStatus: PaymentStatus;
+  amount: number;
+  transactionId?: string;
+  provider?: string;
+  paidAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FavoriteShopRecord {
+  userId: string;
+  shopId: string;
+  createdAt: string;
+}
+
+export interface TokenCounterRecord {
+  shopId: string;
+  tokenDate: string;
+  lastToken: number;
+}

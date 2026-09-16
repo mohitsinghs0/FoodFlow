@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from '../../context/RouterContext';
+import { useAuth } from '../../context/AuthContext';
 import { BusinessLayout } from '../../components/business/BusinessLayout';
 import { 
   Bell, 
@@ -17,18 +18,21 @@ import { BusinessNotification } from '../../types';
 
 export const BusinessNotificationsView: React.FC = () => {
   const { navigate } = useRouter();
+  const { activeShopId, currentBusiness } = useAuth();
+  const targetShopId = activeShopId || currentBusiness?.id || 'demo-shop-001';
+
   const [notifications, setNotifications] = useState<BusinessNotification[]>([]);
   const [loading, setLoading] = useState(true);
 
   const loadNotifs = async () => {
-    const data = await notificationService.getNotifications('sharma-vada-pav');
+    const data = await notificationService.getNotifications(targetShopId);
     setNotifications(data);
     setLoading(false);
   };
 
   useEffect(() => {
     loadNotifs();
-  }, []);
+  }, [targetShopId]);
 
   const handleMarkRead = async (id: string) => {
     await notificationService.markAsRead(id);
@@ -36,7 +40,7 @@ export const BusinessNotificationsView: React.FC = () => {
   };
 
   const handleMarkAllRead = async () => {
-    await notificationService.markAllAsRead('sharma-vada-pav');
+    await notificationService.markAllAsRead(targetShopId);
     setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
   };
 

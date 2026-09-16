@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useRouter } from '../../context/RouterContext';
+import { useAuth } from '../../context/AuthContext';
 import { BusinessLayout } from '../../components/business/BusinessLayout';
 import { 
   Volume2, 
@@ -12,13 +13,18 @@ import {
   RotateCcw, 
   Check, 
   Store,
-  Smartphone
+  Smartphone,
+  LogOut,
+  User,
+  Mail,
+  Phone
 } from 'lucide-react';
 import { notificationService } from '../../services/notificationService';
 import { MOCK_BUSINESS_OWNER } from '../../data/mockData';
 
 export const BusinessSettingsView: React.FC = () => {
   const { navigate } = useRouter();
+  const { currentUser, currentBusiness, logout } = useAuth();
   const [sound, setSound] = useState(() => localStorage.getItem('foodflow_sound') !== 'false');
   const [rushMode, setRushMode] = useState(() => localStorage.getItem('foodflow_rush_mode') === 'true');
   const [browserAlerts, setBrowserAlerts] = useState(false);
@@ -55,6 +61,11 @@ export const BusinessSettingsView: React.FC = () => {
     }
   };
 
+  const handleLogout = async () => {
+    await logout();
+    navigate('/login');
+  };
+
   return (
     <BusinessLayout activeTab="more" title="Preferences & Settings">
       <div className="max-w-2xl mx-auto space-y-5">
@@ -62,17 +73,23 @@ export const BusinessSettingsView: React.FC = () => {
         <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs flex items-center justify-between">
           <div className="flex items-center gap-3.5">
             <div className="w-12 h-12 rounded-2xl bg-orange-600 text-white font-black text-lg flex items-center justify-center shadow-xs">
-              RS
+              {(currentUser?.fullName || 'O').charAt(0).toUpperCase()}
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="font-bold text-sm text-slate-900">{MOCK_BUSINESS_OWNER.name}</h3>
+                <h3 className="font-bold text-sm text-slate-900">
+                  {currentUser?.fullName || 'Stall Owner'}
+                </h3>
                 <span className="text-[10px] font-bold uppercase bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded">
-                  {MOCK_BUSINESS_OWNER.role}
+                  {currentUser?.role || 'OWNER'}
                 </span>
               </div>
-              <p className="text-xs text-slate-500">{MOCK_BUSINESS_OWNER.phone} • {MOCK_BUSINESS_OWNER.email}</p>
-              <p className="text-[11px] font-mono text-slate-400 mt-0.5">UPI: {MOCK_BUSINESS_OWNER.upiId}</p>
+              <p className="text-xs text-slate-500 font-medium">
+                {currentBusiness?.name || 'Registered Stall'}
+              </p>
+              <p className="text-xs text-slate-400">
+                {currentUser?.phone} {currentUser?.email && `• ${currentUser?.email}`}
+              </p>
             </div>
           </div>
 
@@ -80,7 +97,7 @@ export const BusinessSettingsView: React.FC = () => {
             onClick={() => navigate('/business/shop')}
             className="px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold transition-colors"
           >
-            Edit
+            Edit Shop
           </button>
         </div>
 
@@ -205,6 +222,14 @@ export const BusinessSettingsView: React.FC = () => {
           >
             <RotateCcw className="w-3.5 h-3.5" />
             <span>Reset Demo Orders & Menu to Defaults</span>
+          </button>
+
+          <button
+            onClick={handleLogout}
+            className="w-full py-3 px-4 rounded-2xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 font-bold text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer"
+          >
+            <LogOut className="w-4 h-4" />
+            <span>Sign Out from Owner Account</span>
           </button>
         </div>
       </div>

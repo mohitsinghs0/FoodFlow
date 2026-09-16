@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from '../../context/RouterContext';
+import { useAuth } from '../../context/AuthContext';
 import { BusinessLayout } from '../../components/business/BusinessLayout';
 import { 
   Plus, 
@@ -18,6 +19,9 @@ import { MenuItem, ShopCategory } from '../../types';
 
 export const BusinessMenuView: React.FC = () => {
   const { navigate } = useRouter();
+  const { activeShopId, currentBusiness } = useAuth();
+  const targetShopId = activeShopId || currentBusiness?.id || 'demo-shop-001';
+
   const [items, setItems] = useState<MenuItem[]>([]);
   const [categories, setCategories] = useState<ShopCategory[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -28,8 +32,8 @@ export const BusinessMenuView: React.FC = () => {
   const loadData = async () => {
     try {
       const [menuItems, cats] = await Promise.all([
-        menuService.getShopMenu('sharma-vada-pav'),
-        menuService.getCategories('sharma-vada-pav'),
+        menuService.getShopMenu(targetShopId),
+        menuService.getCategories(targetShopId),
       ]);
       setItems(menuItems);
       setCategories(cats);
@@ -40,7 +44,7 @@ export const BusinessMenuView: React.FC = () => {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [targetShopId]);
 
   const handleToggleAvailability = async (itemId: string, currentStatus: boolean) => {
     const updated = await menuService.updateItemAvailability(itemId, !currentStatus);

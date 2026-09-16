@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from '../../context/RouterContext';
+import { useAuth } from '../../context/AuthContext';
 import { BusinessLayout } from '../../components/business/BusinessLayout';
 import { 
   ArrowLeft, 
@@ -15,6 +16,9 @@ import { MenuItem, ShopCategory } from '../../types';
 
 export const BusinessItemFormView: React.FC = () => {
   const { route, navigate } = useRouter();
+  const { activeShopId, currentBusiness } = useAuth();
+  const targetShopId = activeShopId || currentBusiness?.id || 'demo-shop-001';
+
   const itemId = route.params.itemId;
   const isEditing = Boolean(itemId && itemId !== 'new');
 
@@ -31,7 +35,7 @@ export const BusinessItemFormView: React.FC = () => {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    menuService.getCategories('sharma-vada-pav').then(setCategories);
+    menuService.getCategories(targetShopId).then(setCategories);
 
     if (isEditing && itemId) {
       menuService.getMenuItem(itemId).then((item) => {
@@ -48,7 +52,7 @@ export const BusinessItemFormView: React.FC = () => {
         setLoading(false);
       });
     }
-  }, [isEditing, itemId]);
+  }, [targetShopId, isEditing, itemId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,7 +75,7 @@ export const BusinessItemFormView: React.FC = () => {
         });
       } else {
         await menuService.createItem({
-          shopId: 'sharma-vada-pav',
+          shopId: targetShopId,
           name: name.trim(),
           categoryId,
           price: numPrice,

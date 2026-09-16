@@ -1,23 +1,36 @@
 import { Order } from '../types';
 import { orderService } from './orderService';
+import { firestoreSync } from './firestoreSyncService';
 
 type OrderEventCallback = (order: Order) => void;
 type OrdersListCallback = (orders: Order[]) => void;
 
 /**
- * Frontend WebSocket / Realtime event bus abstraction.
- * Currently backed by browser in-memory dispatch and localStorage storage events,
- * and architected for 1:1 drop-in replacement with WebSockets, SSE, or Firebase Realtime.
+ * Real-time event bus backed by Cloud Firestore onSnapshot listeners
+ * with seamless local storage cross-tab events fallback.
  */
 class OrderRealtimeService {
   private isConnected: boolean = true;
   private connectionListeners = new Set<(status: boolean) => void>();
 
   public subscribeToShop(shopId: string, onOrdersUpdate: OrdersListCallback): () => void {
-    // Connect to orderService pub/sub
+    // 1. Connect to local pub/sub
     const unsubscribeOrderService = orderService.subscribeToShopOrders(shopId, onOrdersUpdate);
 
-    // Cross-tab synchronization via window storage events
+    // 2. Connect to Cloud Firestore Realtime collection listener
+    const unsubscribeFirestore = firestoreSync.subscribeToShopOrders(shopId, (cloudOrders) => {
+      // Merge with stored orders
+      const current = orderService.getStoredOrders();
+      const map = new Map<string, Order>();
+      current.forEach((o) => map.set(o.id, o));
+      cloudOrders.forEach((o) => map.set(o.id, o));
+      const merged = Array.from(map.values());
+      merged.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      orderService.saveOrders(merged);
+      onOrdersUpdate(merged.filter((o) => o.shopId === shopId));
+    });
+
+    // 3. Cross-tab synchronization via window storage events
     const storageHandler = (e: StorageEvent) => {
       if (e.key === 'foodflow_customer_orders') {
         orderService.getShopOrders(shopId).then((orders) => {
@@ -30,12 +43,30 @@ class OrderRealtimeService {
 
     return () => {
       unsubscribeOrderService();
+      unsubscribeFirestore();
       window.removeEventListener('storage', storageHandler);
     };
   }
 
   public subscribeToOrder(orderId: string, onOrderUpdate: OrderEventCallback): () => void {
-    return orderService.subscribeToOrder(orderId, onOrderUpdate);
+    const unsubLocal = orderService.subscribeToOrder(orderId, onOrderUpdate);
+    const unsubFirestore = firestoreSync.subscribeToSingleOrder(orderId, (order) => {
+      // Update local storage
+      const current = orderService.getStoredOrders();
+      const idx = current.findIndex((o) => o.id === order.id);
+      if (idx !== -1) {
+        current[idx] = order;
+      } else {
+        current.unshift(order);
+      }
+      orderService.saveOrders(current);
+      onOrderUpdate(order);
+    });
+
+    return () => {
+      unsubLocal();
+      unsubFirestore();
+    };
   }
 
   public setConnectionStatus(online: boolean): void {

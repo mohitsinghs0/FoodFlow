@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from '../../context/RouterContext';
+import { useAuth } from '../../context/AuthContext';
 import { BusinessLayout } from '../../components/business/BusinessLayout';
 import { 
   TrendingUp, 
@@ -16,17 +17,20 @@ import { salesService } from '../../services/salesService';
 import { SalesSummary } from '../../types';
 
 export const BusinessSalesView: React.FC = () => {
+  const { activeShopId, currentBusiness } = useAuth();
+  const targetShopId = activeShopId || currentBusiness?.id || 'demo-shop-001';
+
   const [period, setPeriod] = useState<'TODAY' | 'YESTERDAY' | 'THIS_WEEK' | 'THIS_MONTH'>('TODAY');
   const [summary, setSummary] = useState<SalesSummary | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setLoading(true);
-    salesService.getSalesSummary('sharma-vada-pav', period).then((data) => {
+    salesService.getSalesSummary(targetShopId, period).then((data) => {
       setSummary(data);
       setLoading(false);
     });
-  }, [period]);
+  }, [targetShopId, period]);
 
   const printReport = () => {
     window.print();

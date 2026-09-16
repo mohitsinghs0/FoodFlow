@@ -11,6 +11,9 @@ import { BottomNav } from './components/common/BottomNav';
 import { FloatingCartBar } from './components/common/FloatingCartBar';
 import { CartConflictModal } from './components/common/CartConflictModal';
 import { QRScanModal } from './components/common/QRScanModal';
+import { GlobalLoadingSkeleton } from './components/common/GlobalLoadingSkeleton';
+import { AuthProvider } from './context/AuthContext';
+import { ProtectedRoute } from './components/common/ProtectedRoute';
 
 // Customer Views
 import { HomeView } from './views/HomeView';
@@ -23,6 +26,8 @@ import { OrderTrackerView } from './views/OrderTrackerView';
 import { OrdersHistoryView } from './views/OrdersHistoryView';
 import { SavedShopsView } from './views/SavedShopsView';
 import { ProfileView } from './views/ProfileView';
+import { LoginView } from './views/LoginView';
+import { RegisterView } from './views/RegisterView';
 
 // Business Ecosystem Views
 import { BusinessDashboardView } from './views/business/BusinessDashboardView';
@@ -36,43 +41,82 @@ import { BusinessQRView } from './views/business/BusinessQRView';
 import { BusinessSalesView } from './views/business/BusinessSalesView';
 import { BusinessNotificationsView } from './views/business/BusinessNotificationsView';
 import { BusinessSettingsView } from './views/business/BusinessSettingsView';
+import { firestoreSync } from './services/firestoreSyncService';
 
 const AppContent: React.FC = () => {
   const { route } = useRouter();
   const [isQRScannerOpen, setIsQRScannerOpen] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+
+  React.useEffect(() => {
+    // Subscribe to Firestore active network sync / fetch states
+    const unsub = firestoreSync.subscribeSyncState((syncing) => {
+      setIsSyncing(syncing);
+    });
+
+    firestoreSync.initializeDatabase().finally(() => {
+      // Allow slight breather for perceived smooth transition
+      setTimeout(() => setIsInitialLoading(false), 500);
+    });
+
+    return () => unsub();
+  }, []);
 
   const isBusinessRoute = route && route.name.startsWith('business-');
 
   // If inside business dashboard ecosystem, render appropriate business view directly
   if (isBusinessRoute) {
+    let businessView: React.ReactNode;
     switch (route.name) {
       case 'business-dashboard':
-        return <BusinessDashboardView />;
+        businessView = <BusinessDashboardView />;
+        break;
       case 'business-orders':
       case 'business-history':
-        return <BusinessOrdersView />;
+        businessView = <BusinessOrdersView />;
+        break;
       case 'business-order-detail':
-        return <BusinessOrderDetailView />;
+        businessView = <BusinessOrderDetailView />;
+        break;
       case 'business-menu':
-        return <BusinessMenuView />;
+        businessView = <BusinessMenuView />;
+        break;
       case 'business-menu-new':
       case 'business-menu-edit':
-        return <BusinessItemFormView />;
+        businessView = <BusinessItemFormView />;
+        break;
       case 'business-availability':
-        return <BusinessAvailabilityView />;
+        businessView = <BusinessAvailabilityView />;
+        break;
       case 'business-shop':
-        return <BusinessShopProfileView />;
+        businessView = <BusinessShopProfileView />;
+        break;
       case 'business-qr':
-        return <BusinessQRView />;
+        businessView = <BusinessQRView />;
+        break;
       case 'business-sales':
-        return <BusinessSalesView />;
+        businessView = <BusinessSalesView />;
+        break;
       case 'business-notifications':
-        return <BusinessNotificationsView />;
+        businessView = <BusinessNotificationsView />;
+        break;
       case 'business-settings':
-        return <BusinessSettingsView />;
+        businessView = <BusinessSettingsView />;
+        break;
       default:
-        return <BusinessDashboardView />;
+        businessView = <BusinessDashboardView />;
+        break;
     }
+
+    return (
+      <>
+        <GlobalLoadingSkeleton isSyncing={isSyncing} isInitialLoad={false} />
+        <ProtectedRoute requiredRole="owner" redirectTo="/business">
+          {businessView}
+        </ProtectedRoute>
+      </>
+    );
   }
 
   // Render customer views
@@ -94,18 +138,39 @@ const AppContent: React.FC = () => {
       case 'order-tracker':
         return <OrderTrackerView orderId={current.params.orderId || 'order-101'} />;
       case 'order-history':
-        return <OrdersHistoryView />;
+        return (
+          <ProtectedRoute requiredRole="customer" redirectTo="/orders">
+            <OrdersHistoryView />
+          </ProtectedRoute>
+        );
       case 'saved':
-        return <SavedShopsView />;
+        return (
+          <ProtectedRoute requiredRole="customer" redirectTo="/saved">
+            <SavedShopsView />
+          </ProtectedRoute>
+        );
       case 'profile':
-        return <ProfileView onOpenQRScanner={() => setIsQRScannerOpen(true)} />;
+        return (
+          <ProtectedRoute requiredRole="customer" redirectTo="/profile">
+            <ProfileView onOpenQRScanner={() => setIsQRScannerOpen(true)} />
+          </ProtectedRoute>
+        );
+      case 'login':
+        return <LoginView />;
+      case 'register':
+        return <RegisterView />;
       default:
         return <HomeView onOpenQRScanner={() => setIsQRScannerOpen(true)} />;
     }
   };
 
+  const isAuthPage = route && (route.name === 'login' || route.name === 'register');
+
   return (
     <div className="min-h-screen bg-[#F8F9FA] text-slate-900 flex flex-col font-sans selection:bg-orange-500 selection:text-white">
+      {/* Global Cloud Firestore Loading Skeletons */}
+      <GlobalLoadingSkeleton isSyncing={isSyncing} isInitialLoad={isInitialLoading} />
+
       {/* Top Header */}
       <Header onOpenQRScanner={() => setIsQRScannerOpen(true)} />
 
@@ -114,11 +179,11 @@ const AppContent: React.FC = () => {
         {renderCustomerView()}
       </main>
 
-      {/* Floating Quick Cart Bar (Hidden in Cart & Checkout Views) */}
-      <FloatingCartBar />
+      {/* Floating Quick Cart Bar (Hidden in Cart, Checkout, and Auth Views) */}
+      {!isAuthPage && <FloatingCartBar />}
 
-      {/* Persistent Bottom Mobile Navigation Bar */}
-      <BottomNav />
+      {/* Persistent Bottom Mobile Navigation Bar (Hidden in Auth Views) */}
+      {!isAuthPage && <BottomNav />}
 
       {/* Single-Shop Cart Conflict Prevention Modal */}
       <CartConflictModal />
@@ -134,10 +199,12 @@ const AppContent: React.FC = () => {
 
 export default function App() {
   return (
-    <RouterProvider>
-      <CartProvider>
-        <AppContent />
-      </CartProvider>
-    </RouterProvider>
+    <AuthProvider>
+      <RouterProvider>
+        <CartProvider>
+          <AppContent />
+        </CartProvider>
+      </RouterProvider>
+    </AuthProvider>
   );
 }

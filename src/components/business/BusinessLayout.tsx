@@ -24,8 +24,10 @@ import {
   ChevronRight,
   Clock,
   Check,
-  X
+  X,
+  LogOut
 } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 import { shopService } from '../../services/shopService';
 import { orderService } from '../../services/orderService';
 import { menuService } from '../../services/menuService';
@@ -53,9 +55,12 @@ export const BusinessLayout: React.FC<BusinessLayoutProps> = ({
   actions,
 }) => {
   const { route, navigate } = useRouter();
+  const { currentUser, currentBusiness, activeShopId, logout } = useAuth();
+  const targetShopId = activeShopId || currentBusiness?.id || 'demo-shop-001';
+
   const [shop, setShop] = useState<Shop | null>(null);
-  const [activeOrdersCount, setActiveOrdersCount] = useState<number>(7);
-  const [unreadNotifsCount, setUnreadNotifsCount] = useState<number>(1);
+  const [activeOrdersCount, setActiveOrdersCount] = useState<number>(0);
+  const [unreadNotifsCount, setUnreadNotifsCount] = useState<number>(0);
   const [isOnline, setIsOnline] = useState<boolean>(true);
   const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
     return localStorage.getItem('foodflow_sound') !== 'false';
@@ -70,18 +75,43 @@ export const BusinessLayout: React.FC<BusinessLayoutProps> = ({
 
   // Load shop and orders
   useEffect(() => {
-    shopService.getShop('sharma-vada-pav').then(setShop);
+    shopService.getShop(targetShopId).then((loadedShop) => {
+      if (loadedShop) {
+        setShop(loadedShop);
+      } else if (currentBusiness) {
+        setShop({
+          id: currentBusiness.id,
+          name: currentBusiness.name,
+          slug: currentBusiness.id,
+          tagline: 'Authentic Food Counter',
+          description: '',
+          stallType: currentBusiness.stallType || 'Thela / Food Stall',
+          image: 'https://images.unsplash.com/photo-1601050690597-df0568f70950?auto=format&fit=crop&w=600&q=80',
+          rating: 4.8,
+          totalRatings: 120,
+          location: {
+            address: currentBusiness.address || 'Counter Stall',
+            city: 'Mumbai',
+          },
+          openingHours: '08:00 AM - 10:00 PM',
+          isOpen: true,
+          contactPhone: currentBusiness.phone || '+91 98200 12345',
+          isPopular: true,
+          counterOrderEnabled: true,
+        });
+      }
+    });
 
     const refreshCounts = async () => {
-      const active = await orderService.getActiveOrders('sharma-vada-pav');
+      const active = await orderService.getActiveOrders(targetShopId);
       setActiveOrdersCount(active.length);
-      const notifs = await notificationService.getNotifications('sharma-vada-pav');
+      const notifs = await notificationService.getNotifications(targetShopId);
       setUnreadNotifsCount(notifs.filter((n) => !n.isRead).length);
     };
 
     refreshCounts();
 
-    const unsubOrders = orderRealtimeService.subscribeToShop('sharma-vada-pav', (orders) => {
+    const unsubOrders = orderRealtimeService.subscribeToShop(targetShopId, (orders) => {
       const active = orders.filter(
         (o) =>
           o.orderStatus === 'PENDING' ||
@@ -92,13 +122,15 @@ export const BusinessLayout: React.FC<BusinessLayoutProps> = ({
       setActiveOrdersCount(active.length);
     });
 
-    const unsubShop = shopService.subscribeToShop('sharma-vada-pav', setShop);
+    const unsubShop = shopService.subscribeToShop(targetShopId, (s) => {
+      if (s) setShop(s);
+    });
 
     return () => {
       unsubOrders();
       unsubShop();
     };
-  }, []);
+  }, [targetShopId, currentBusiness]);
 
   const toggleSound = () => {
     const next = !soundEnabled;
@@ -155,7 +187,7 @@ export const BusinessLayout: React.FC<BusinessLayoutProps> = ({
                 </span>
               </div>
               <p className="text-xs text-slate-500 font-medium truncate max-w-[140px]">
-                {shop?.name || 'Sharma Vada Pav'}
+                {currentBusiness?.name || shop?.name || 'My Food Stall'}
               </p>
             </div>
           </div>
@@ -325,11 +357,22 @@ export const BusinessLayout: React.FC<BusinessLayoutProps> = ({
           </button>
 
           <button
-            onClick={() => navigate('/shop/sharma-vada-pav')}
+            onClick={() => navigate('/')}
             className="w-full flex items-center justify-center gap-1.5 py-2 px-3 bg-white border border-slate-200 text-slate-700 font-medium text-xs rounded-xl hover:bg-slate-50 transition-colors"
           >
             <ArrowLeftRight className="w-3.5 h-3.5 text-slate-400" />
             <span>Switch to Customer App</span>
+          </button>
+
+          <button
+            onClick={async () => {
+              await logout();
+              navigate('/login');
+            }}
+            className="w-full flex items-center justify-center gap-1.5 py-2 px-3 bg-rose-50 border border-rose-200 text-rose-700 font-bold text-xs rounded-xl hover:bg-rose-100 transition-colors cursor-pointer"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            <span>Sign Out</span>
           </button>
         </div>
       </aside>

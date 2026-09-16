@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useRouter } from '../../context/RouterContext';
+import { useAuth } from '../../context/AuthContext';
 import { BusinessLayout } from '../../components/business/BusinessLayout';
 import { 
   QrCode, 
@@ -15,14 +16,19 @@ import {
 
 export const BusinessQRView: React.FC = () => {
   const { navigate } = useRouter();
+  const { currentBusiness, activeShopId } = useAuth();
+  const targetShopId = activeShopId || currentBusiness?.id || 'sharma-vada-pav';
+  const stallName = currentBusiness?.name || 'Sharma Vada Pav';
+  const stallAddress = currentBusiness?.address || 'Gate 2, Andheri West Metro Station';
+
   const [selectedTable, setSelectedTable] = useState<string>('counter');
   const [copied, setCopied] = useState(false);
 
   // Target customer URL
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://foodflow.app';
   const customerPath = selectedTable === 'counter' 
-    ? `#/shop/sharma-vada-pav` 
-    : `#/shop/sharma-vada-pav?table=${selectedTable}`;
+    ? `#/shop/${targetShopId}` 
+    : `#/shop/${targetShopId}?table=${selectedTable}`;
   const fullUrl = `${baseUrl}/${customerPath}`;
 
   const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(fullUrl)}`;
@@ -110,8 +116,8 @@ export const BusinessQRView: React.FC = () => {
 
             {/* Stall Branding */}
             <div>
-              <h2 className="text-xl font-black text-slate-950 uppercase tracking-tight">Sharma Vada Pav</h2>
-              <p className="text-xs text-slate-500 font-medium mt-0.5">Gate 2, Andheri West Metro Station</p>
+              <h2 className="text-xl font-black text-slate-950 uppercase tracking-tight">{stallName}</h2>
+              <p className="text-xs text-slate-500 font-medium mt-0.5">{stallAddress}</p>
               {selectedTable !== 'counter' && (
                 <div className="inline-block mt-1 px-3 py-0.5 rounded-full bg-purple-100 text-purple-900 text-xs font-black uppercase">
                   Dine-In • Table {selectedTable}

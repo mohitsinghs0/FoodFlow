@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from '../../context/RouterContext';
+import { useAuth } from '../../context/AuthContext';
 import { BusinessLayout } from '../../components/business/BusinessLayout';
 import { 
   CheckCircle2, 
@@ -16,6 +17,9 @@ import { MenuItem } from '../../types';
 
 export const BusinessAvailabilityView: React.FC = () => {
   const { navigate } = useRouter();
+  const { activeShopId, currentBusiness } = useAuth();
+  const targetShopId = activeShopId || currentBusiness?.id || 'demo-shop-001';
+
   const [items, setItems] = useState<MenuItem[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [filter, setFilter] = useState<'ALL' | 'AVAILABLE' | 'UNAVAILABLE'>('ALL');
@@ -24,7 +28,7 @@ export const BusinessAvailabilityView: React.FC = () => {
 
   const loadItems = async () => {
     try {
-      const data = await menuService.getShopMenu('sharma-vada-pav');
+      const data = await menuService.getShopMenu(targetShopId);
       setItems(data);
     } finally {
       setLoading(false);
@@ -33,7 +37,7 @@ export const BusinessAvailabilityView: React.FC = () => {
 
   useEffect(() => {
     loadItems();
-  }, []);
+  }, [targetShopId]);
 
   const handleToggle = async (itemId: string, currentStatus: boolean) => {
     setTogglingId(itemId);

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from '../context/RouterContext';
+import { useAuth } from '../context/AuthContext';
 import { shopService } from '../services/shopService';
 import { menuService } from '../services/menuService';
 import { Shop, MenuItem, ShopCategory } from '../types';
@@ -24,7 +25,8 @@ interface ShopDetailViewProps {
 }
 
 export const ShopDetailView: React.FC<ShopDetailViewProps> = ({ shopId }) => {
-  const { navigate, goBack } = useRouter();
+  const { route, navigate, goBack } = useRouter();
+  const { isAuthenticated } = useAuth();
   const [shop, setShop] = useState<Shop | null>(null);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [categories, setCategories] = useState<ShopCategory[]>([]);
@@ -62,6 +64,10 @@ export const ShopDetailView: React.FC<ShopDetailViewProps> = ({ shopId }) => {
 
   const handleToggleSaved = () => {
     if (!shop) return;
+    if (!isAuthenticated) {
+      navigate(`/login?redirect=${encodeURIComponent(route.path || `/shop/${shop.slug}`)}`);
+      return;
+    }
     const nowSaved = shopService.toggleSaveShop(shop.id);
     setIsSaved(nowSaved);
   };

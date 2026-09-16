@@ -1,6 +1,7 @@
 import React from 'react';
 import { Shop } from '../../types';
 import { useRouter } from '../../context/RouterContext';
+import { useAuth } from '../../context/AuthContext';
 import { shopService } from '../../services/shopService';
 import { Clock, MapPin, Star, Heart, Store } from 'lucide-react';
 
@@ -17,7 +18,8 @@ export const ShopCard: React.FC<ShopCardProps> = ({
   onToggleSaved,
   layout = 'card',
 }) => {
-  const { navigate } = useRouter();
+  const { route, navigate } = useRouter();
+  const { isAuthenticated } = useAuth();
 
   const handleCardClick = () => {
     navigate(`/shop/${shop.slug}`);
@@ -25,6 +27,10 @@ export const ShopCard: React.FC<ShopCardProps> = ({
 
   const handleHeartClick = (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (!isAuthenticated) {
+      navigate(`/login?redirect=${encodeURIComponent(route.path || '/')}`);
+      return;
+    }
     if (onToggleSaved) {
       onToggleSaved(shop.id);
     } else {

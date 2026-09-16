@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from '../../context/RouterContext';
+import { useAuth } from '../../context/AuthContext';
 import { BusinessLayout } from '../../components/business/BusinessLayout';
 import { OrderCard } from '../../components/business/OrderCard';
 import { RushModeView } from '../../components/business/RushModeView';
@@ -21,6 +22,9 @@ import { Order, OrderStatus } from '../../types';
 
 export const BusinessOrdersView: React.FC = () => {
   const { route, navigate } = useRouter();
+  const { activeShopId, currentBusiness } = useAuth();
+  const targetShopId = activeShopId || currentBusiness?.id || 'demo-shop-001';
+
   const [orders, setOrders] = useState<Order[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'PENDING' | 'PREPARING' | 'READY' | 'COMPLETED'>('ALL');
@@ -43,20 +47,20 @@ export const BusinessOrdersView: React.FC = () => {
   }, []);
 
   const loadOrders = async () => {
-    const all = await orderService.getShopOrders('sharma-vada-pav');
+    const all = await orderService.getShopOrders(targetShopId);
     setOrders(all);
   };
 
   useEffect(() => {
     loadOrders();
-    const unsub = orderRealtimeService.subscribeToShop('sharma-vada-pav', setOrders);
+    const unsub = orderRealtimeService.subscribeToShop(targetShopId, setOrders);
     return () => unsub();
-  }, []);
+  }, [targetShopId]);
 
   const handleSimulate = async () => {
     setIsSimulating(true);
     try {
-      await orderRealtimeService.simulateIncomingOrder('sharma-vada-pav');
+      await orderRealtimeService.simulateIncomingOrder(targetShopId);
       await loadOrders();
     } finally {
       setIsSimulating(false);

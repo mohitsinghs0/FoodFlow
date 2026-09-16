@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from '../context/RouterContext';
+import { useAuth } from '../context/AuthContext';
 import { orderService } from '../services/orderService';
 import { Order } from '../types';
 import { EmptyState } from '../components/common/EmptyState';
@@ -17,19 +18,20 @@ import {
 
 export const OrdersHistoryView: React.FC = () => {
   const { navigate } = useRouter();
+  const { currentUser } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchOrders = async () => {
       setLoading(true);
-      const data = await orderService.getCustomerOrders();
+      const data = await orderService.getCustomerOrders(currentUser?.id);
       setOrders(data);
       setLoading(false);
     };
 
     fetchOrders();
-  }, []);
+  }, [currentUser?.id]);
 
   if (loading) {
     return (

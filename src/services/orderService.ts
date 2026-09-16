@@ -1,5 +1,7 @@
 import { Order, OrderStatus } from '../types';
 import { INITIAL_ORDERS } from '../data/mockData';
+import { firestoreSync } from './firestoreSyncService';
+import { assertValidOrderSubmission } from '../utils/orderValidation';
 
 const ORDERS_STORAGE_KEY = 'foodflow_customer_orders';
 const ORDER_LISTENERS_MAP = new Map<string, Set<(order: Order) => void>>();
@@ -26,9 +28,13 @@ export const orderService = {
     }
   },
 
-  async getCustomerOrders(): Promise<Order[]> {
+  async getCustomerOrders(customerId?: string): Promise<Order[]> {
     await new Promise((r) => setTimeout(r, 40));
-    return this.getStoredOrders();
+    const all = this.getStoredOrders();
+    if (!customerId) {
+      return all;
+    }
+    return all.filter((o) => !o.customerId || o.customerId === customerId || o.customerId === 'demo-customer-001');
   },
 
   async getShopOrders(shopId: string): Promise<Order[]> {
@@ -118,6 +124,7 @@ export const orderService = {
     shopName: string;
     shopImage?: string;
     shopLocation: string;
+    customerId?: string;
     customerName: string;
     customerPhone: string;
     orderType: 'TAKEAWAY' | 'DINE_IN';
@@ -139,8 +146,14 @@ export const orderService = {
     await new Promise((r) => setTimeout(r, 60));
     const orders = this.getStoredOrders();
 
-    // Generate token number
-    const tokenInt = Math.floor(144 + Math.random() * 40);
+    // 1. Validation helper: verify total_amount matches sum(order_items.subtotal)
+    assertValidOrderSubmission({
+      items: data.items,
+      total: data.total,
+    });
+
+    // 2. Generate unique, shop-specific daily token using transactional atomic generator
+    const tokenInt = await firestoreSync.generateOrderToken(data.shopId);
     const tokenNumber = `#${tokenInt}`;
 
     const newOrder: Order = {
@@ -149,7 +162,7 @@ export const orderService = {
       shopName: data.shopName,
       shopImage: data.shopImage,
       shopLocation: data.shopLocation,
-      customerId: 'cust-user',
+      customerId: data.customerId || 'cust-user',
       customerName: data.customerName || 'Walk-in Customer',
       customerPhone: data.customerPhone || '+91 98765 43210',
       tokenNumber,
@@ -170,13 +183,14 @@ export const orderService = {
     this.saveOrders(updated);
     this.notifyOrderListeners(newOrder);
     this.notifyShopListeners(data.shopId);
+    await firestoreSync.saveOrder(newOrder);
 
     return newOrder;
   },
 
   async simulateIncomingOrder(shopId: string = 'sharma-vada-pav'): Promise<Order> {
     const orders = this.getStoredOrders();
-    const tokenInt = Math.floor(150 + Math.random() * 40);
+    const tokenInt = await firestoreSync.generateOrderToken(shopId);
     const tokenNumber = `#${tokenInt}`;
 
     const sampleSets = [
@@ -228,10 +242,14 @@ export const orderService = {
       instructions: pick.notes,
     };
 
+    // Assert validation
+    assertValidOrderSubmission(newOrder);
+
     const updated = [newOrder, ...orders];
     this.saveOrders(updated);
     this.notifyOrderListeners(newOrder);
     this.notifyShopListeners(shopId);
+    await firestoreSync.saveOrder(newOrder);
 
     return newOrder;
   },
@@ -252,6 +270,10 @@ export const orderService = {
     this.saveOrders(orders);
     this.notifyOrderListeners(order);
     this.notifyShopListeners(order.shopId);
+    firestoreSync.updateOrderStatus(orderId, status, {
+      readyAt: order.readyAt,
+      completedAt: order.completedAt,
+    });
 
     return order;
   },

@@ -1,20 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from '../context/RouterContext';
-import { customerService } from '../services/customerService';
-import { UserProfile } from '../types';
+import { useAuth } from '../context/AuthContext';
 import { 
   User, 
   Phone, 
   Mail, 
-  MapPin, 
   ReceiptText, 
   Heart, 
   QrCode, 
-  Bell, 
-  Shield, 
   ChevronRight,
   Check,
-  Smartphone
+  Smartphone,
+  LogOut,
+  Store,
+  ArrowRight
 } from 'lucide-react';
 
 interface ProfileViewProps {
@@ -23,30 +22,50 @@ interface ProfileViewProps {
 
 export const ProfileView: React.FC<ProfileViewProps> = ({ onOpenQRScanner }) => {
   const { navigate } = useRouter();
-  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const { currentUser, updateProfile, logout } = useAuth();
+
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    customerService.getProfile().then((data) => {
-      setProfile(data);
-      setName(data.name);
-      setPhone(data.phone);
-    });
-  }, []);
+    if (currentUser) {
+      setName(currentUser.fullName || '');
+      setPhone(currentUser.phone || '');
+      setEmail(currentUser.email || '');
+    }
+  }, [currentUser]);
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    const updated = await customerService.updateProfile({ name, phone });
-    setProfile(updated);
-    setIsEditing(false);
-    setSavedSuccess(true);
-    setTimeout(() => setSavedSuccess(false), 2000);
+    if (!name.trim()) return;
+
+    setIsSaving(true);
+    try {
+      await updateProfile({
+        fullName: name.trim(),
+        phone: phone.trim(),
+        email: email.trim() || undefined,
+      });
+      setIsEditing(false);
+      setSavedSuccess(true);
+      setTimeout(() => setSavedSuccess(false), 2500);
+    } catch (err) {
+      console.error('Failed to update profile:', err);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  if (!profile) return null;
+  const handleLogout = async () => {
+    await logout();
+    navigate('/');
+  };
+
+  if (!currentUser) return null;
 
   return (
     <div className="pb-28 max-w-xl mx-auto px-4 sm:px-6 pt-3 sm:pt-4 space-y-5 animate-in fade-in duration-200">
@@ -56,43 +75,50 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onOpenQRScanner }) => 
             Customer Profile
           </h1>
           <p className="text-xs text-slate-500 font-medium mt-0.5">
-            Guest customer details for counter tokens & receipts
+            Your account details for counter tokens, receipts & saved stalls
           </p>
         </div>
       </div>
 
       {savedSuccess && (
-        <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center gap-2">
+        <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center gap-2">
           <Check className="w-4 h-4 text-emerald-600" />
           <span>Profile details updated successfully!</span>
         </div>
       )}
 
       {/* Profile Card */}
-      <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs">
+      <div className="bg-white rounded-3xl border border-slate-200/90 p-5 sm:p-6 shadow-xs">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3.5">
             <div className="w-14 h-14 rounded-2xl bg-orange-600 text-white flex items-center justify-center font-black text-xl shadow-xs">
-              {profile.name.charAt(0)}
+              {currentUser.fullName.charAt(0).toUpperCase()}
             </div>
             <div>
-              <h2 className="font-bold text-base text-slate-900 leading-snug">
-                {profile.name}
-              </h2>
-              <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
-                <Phone className="w-3 h-3 text-slate-400" />
-                <span>{profile.phone}</span>
+              <div className="flex items-center gap-2">
+                <h2 className="font-bold text-base text-slate-900 leading-snug">
+                  {currentUser.fullName}
+                </h2>
+                <span className="px-2 py-0.5 rounded-md bg-orange-50 text-orange-700 text-[10px] font-bold uppercase tracking-wider border border-orange-200/60">
+                  Customer
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 flex items-center gap-1.5 mt-1">
+                <Phone className="w-3.5 h-3.5 text-slate-400" />
+                <span>{currentUser.phone}</span>
               </p>
-              <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
-                <Mail className="w-3 h-3 text-slate-400" />
-                <span>{profile.email}</span>
-              </p>
+              {currentUser.email && (
+                <p className="text-xs text-slate-500 flex items-center gap-1.5 mt-0.5">
+                  <Mail className="w-3.5 h-3.5 text-slate-400" />
+                  <span>{currentUser.email}</span>
+                </p>
+              )}
             </div>
           </div>
 
           <button
             onClick={() => setIsEditing(!isEditing)}
-            className="text-xs font-bold text-orange-600 hover:text-orange-700 bg-orange-50 px-3 py-1.5 rounded-xl border border-orange-200/60"
+            className="text-xs font-bold text-orange-600 hover:text-orange-700 bg-orange-50 px-3 py-1.5 rounded-xl border border-orange-200/60 transition-colors"
           >
             {isEditing ? 'Cancel' : 'Edit'}
           </button>
@@ -102,13 +128,14 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onOpenQRScanner }) => 
           <form onSubmit={handleSaveProfile} className="mt-4 pt-4 border-t border-slate-100 space-y-3">
             <div>
               <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                Name
+                Full Name
               </label>
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold focus:outline-none focus:border-orange-500"
+                required
               />
             </div>
             <div>
@@ -120,20 +147,33 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onOpenQRScanner }) => 
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold focus:outline-none focus:border-orange-500"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                Email Address (Optional)
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold focus:outline-none focus:border-orange-500"
               />
             </div>
             <button
               type="submit"
-              className="w-full py-2.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs shadow-xs"
+              disabled={isSaving}
+              className="w-full py-2.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs shadow-xs disabled:opacity-50"
             >
-              Save Changes
+              {isSaving ? 'Saving...' : 'Save Changes'}
             </button>
           </form>
         )}
       </div>
 
       {/* Quick Action Navigation */}
-      <div className="bg-white rounded-2xl border border-slate-200/90 divide-y divide-slate-100 overflow-hidden shadow-xs">
+      <div className="bg-white rounded-3xl border border-slate-200/90 divide-y divide-slate-100 overflow-hidden shadow-xs">
         <button
           onClick={() => navigate('/orders')}
           className="w-full p-4 flex items-center justify-between text-left hover:bg-slate-50 transition-colors group"
@@ -194,35 +234,42 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onOpenQRScanner }) => 
           <ChevronRight className="w-4 h-4 text-slate-400 group-hover:translate-x-0.5 transition-transform" />
         </button>
 
-        {/* Stall Owner Ecosystem Portal */}
-        <button
-          onClick={() => navigate('/business')}
-          className="w-full p-4 flex items-center justify-between text-left bg-slate-900 text-white hover:bg-slate-800 transition-colors group"
-        >
+        {/* Stall Owner Portal for merchant sign up / sign in */}
+        <div className="p-4 bg-slate-50/80 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-slate-800 text-amber-400 flex items-center justify-center font-black">
-              FF
+            <div className="w-9 h-9 rounded-xl bg-slate-900 text-orange-400 flex items-center justify-center font-black">
+              <Store className="w-4 h-4" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h4 className="font-bold text-xs sm:text-sm text-white">
-                  Stall Owner Dashboard
-                </h4>
-                <span className="text-[10px] font-bold bg-amber-400 text-slate-950 px-1.5 py-0.2 rounded">
-                  Merchant Mode
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-400">
-                Manage orders, Rush mode, live menu, & sales summary
+              <h4 className="font-bold text-xs text-slate-900">
+                Own a Food Stall or Canteen?
+              </h4>
+              <p className="text-[11px] text-slate-500">
+                Digital counter tokens, live menu & instant QR ordering
               </p>
             </div>
           </div>
-          <ChevronRight className="w-4 h-4 text-slate-400 group-hover:translate-x-0.5 transition-transform" />
+          <button
+            onClick={() => navigate('/register?tab=owner')}
+            className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center gap-1 transition-colors shrink-0"
+          >
+            <span>Stall Owner</span>
+            <ArrowRight className="w-3 h-3" />
+          </button>
+        </div>
+
+        {/* Sign Out Action */}
+        <button
+          onClick={handleLogout}
+          className="w-full p-4 flex items-center gap-2.5 text-left text-xs font-bold text-rose-600 hover:bg-rose-50 transition-colors"
+        >
+          <LogOut className="w-4 h-4" />
+          <span>Sign Out from FoodFlow</span>
         </button>
       </div>
 
       {/* Brand Ethos / Product Vision Card */}
-      <div className="p-4 rounded-2xl bg-gradient-to-br from-orange-50 to-amber-50 border border-orange-200/60 text-xs text-slate-700 space-y-1.5">
+      <div className="p-4 rounded-3xl bg-gradient-to-br from-orange-50 to-amber-50 border border-orange-200/60 text-xs text-slate-700 space-y-1.5">
         <div className="flex items-center gap-1.5 font-bold text-orange-900">
           <Smartphone className="w-4 h-4 text-orange-600" />
           <span>No App Install Mandate</span>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useCart } from '../context/CartContext';
 import { useRouter } from '../context/RouterContext';
+import { useAuth } from '../context/AuthContext';
 import { orderService } from '../services/orderService';
 import { customerService } from '../services/customerService';
 import { paymentService } from '../services/paymentService';
@@ -21,12 +22,13 @@ import {
 export const CheckoutView: React.FC = () => {
   const { items, shopId, shopName, shopImage, subtotal, clearCart } = useCart();
   const { navigate, goBack } = useRouter();
+  const { user } = useAuth();
 
   const [orderType, setOrderType] = useState<OrderType>('TAKEAWAY');
   const [tableNumber, setTableNumber] = useState<string>('');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('CASH_AT_COUNTER');
-  const [customerName, setCustomerName] = useState('Mohit');
-  const [customerPhone, setCustomerPhone] = useState('9876543210');
+  const [customerName, setCustomerName] = useState(user?.fullName || 'Mohit');
+  const [customerPhone, setCustomerPhone] = useState(user?.phone?.replace(/[^0-9]/g, '') || '9876543210');
   const [cookingInstructions, setCookingInstructions] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -88,8 +90,9 @@ export const CheckoutView: React.FC = () => {
         shopName: shopName || 'Local Counter',
         shopImage: shopImage || undefined,
         shopLocation: 'Local Street Food Counter',
-        customerName: customerName.trim() || 'Guest Customer',
-        customerPhone: customerPhone.trim() || '+91 98765 00000',
+        customerId: user?.id || 'cust-user',
+        customerName: customerName.trim() || user?.fullName || 'Guest Customer',
+        customerPhone: customerPhone.trim() || user?.phone || '+91 98765 00000',
         orderType,
         tableNumber: orderType === 'DINE_IN' ? tableNumber.trim() : undefined,
         paymentMethod,
@@ -111,8 +114,9 @@ export const CheckoutView: React.FC = () => {
       clearCart();
       sessionStorage.removeItem('foodflow_prefill_table');
       navigate(`/order/${newOrder.id}`);
-    } catch {
-      setErrorMsg('Failed to place order. Please try again.');
+    } catch (err: any) {
+      const msg = err?.message || 'Failed to place order. Please try again.';
+      setErrorMsg(msg);
       setIsSubmitting(false);
     }
   };
