@@ -69,7 +69,8 @@ export const RegisterView: React.FC = () => {
           email: email.trim() || undefined,
           password: password.trim(),
         });
-        navigate(redirectTarget || '/');
+        // Prompt newly registered customers to complete location & profile
+        navigate('/complete-profile');
       } catch (err: any) {
         setError(err?.message || 'Failed to register customer account.');
       } finally {
@@ -81,14 +82,6 @@ export const RegisterView: React.FC = () => {
         setError('Valid email address is required for stall owners.');
         return;
       }
-      if (!shopName.trim()) {
-        setError('Shop / Stall name is required.');
-        return;
-      }
-      if (!shopAddress.trim()) {
-        setError('Shop counter address or landmark is required.');
-        return;
-      }
 
       setLoading(true);
       try {
@@ -97,11 +90,12 @@ export const RegisterView: React.FC = () => {
           phone: cleanPhone,
           email: email.trim(),
           password: password.trim(),
-          shopName: shopName.trim(),
-          shopAddress: shopAddress.trim(),
+          shopName: shopName.trim() || undefined,
+          shopAddress: shopAddress.trim() || undefined,
           stallType,
         });
-        navigate('/business');
+        // Navigate owner to setup stall location, UPI ID, and hours
+        navigate('/setup-shop');
       } catch (err: any) {
         setError(err?.message || 'Failed to register shop owner account.');
       } finally {

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from '../context/RouterContext';
+import { useAuth } from '../context/AuthContext';
 import { shopService } from '../services/shopService';
 import { orderService } from '../services/orderService';
 import { Shop, ShopCategory, Order } from '../types';
@@ -14,7 +15,9 @@ import {
   Store, 
   Receipt,
   Heart,
-  ChevronRight
+  ChevronRight,
+  MapPin,
+  SlidersHorizontal
 } from 'lucide-react';
 
 interface HomeViewProps {
@@ -23,19 +26,26 @@ interface HomeViewProps {
 
 export const HomeView: React.FC<HomeViewProps> = ({ onOpenQRScanner }) => {
   const { navigate } = useRouter();
+  const { currentUser } = useAuth();
   const [categories, setCategories] = useState<ShopCategory[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [distanceFilter, setDistanceFilter] = useState<'all' | '1km' | '2km' | '5km'>('all');
+  const [onlyOpen, setOnlyOpen] = useState<boolean>(false);
   const [shops, setShops] = useState<Shop[]>([]);
   const [recentOrders, setRecentOrders] = useState<Order[]>([]);
   const [savedShopIds, setSavedShopIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const userLocation = currentUser?.latitude && currentUser?.longitude
+    ? { latitude: currentUser.latitude, longitude: currentUser.longitude }
+    : undefined;
 
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       const [cats, allShops, orders] = await Promise.all([
         shopService.getCategories(),
-        shopService.getNearbyShops(),
+        shopService.getNearbyShops(undefined, undefined, userLocation),
         orderService.getCustomerOrders(),
       ]);
       setCategories(cats);
@@ -46,16 +56,28 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenQRScanner }) => {
     };
 
     fetchData();
-  }, []);
+  }, [currentUser?.latitude, currentUser?.longitude]);
 
   const handleToggleSaved = (shopId: string) => {
     shopService.toggleSaveShop(shopId);
     setSavedShopIds(shopService.getSavedShopIds());
   };
 
-  const filteredShops = selectedCategory === 'all'
+  let filteredShops = selectedCategory === 'all'
     ? shops
-    : shops.filter((s) => s.categories.includes(selectedCategory));
+    : shops.filter((s) => s.categories && s.categories.includes(selectedCategory));
+
+  if (onlyOpen) {
+    filteredShops = filteredShops.filter((s) => s.isOpen);
+  }
+
+  if (distanceFilter === '1km') {
+    filteredShops = filteredShops.filter((s) => (s.location?.distanceKm ?? 0) <= 1.0);
+  } else if (distanceFilter === '2km') {
+    filteredShops = filteredShops.filter((s) => (s.location?.distanceKm ?? 0) <= 2.0);
+  } else if (distanceFilter === '5km') {
+    filteredShops = filteredShops.filter((s) => (s.location?.distanceKm ?? 0) <= 5.0);
+  }
 
   const popularShops = shops.filter((s) => s.rating >= 4.7);
   const savedShops = shops.filter((s) => savedShopIds.includes(s.id));
@@ -134,6 +156,65 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenQRScanner }) => {
           <span className="ml-auto hidden sm:inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-600">
             Tap to search
           </span>
+        </div>
+
+        {/* Current User Location & Proximity Filter Bar */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-white border border-slate-200/80 rounded-2xl p-3 shadow-xs">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-8 h-8 rounded-xl bg-orange-50 text-orange-600 flex items-center justify-center flex-shrink-0">
+              <MapPin className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                  Your Location
+                </span>
+                <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.2 rounded">
+                  GPS Active
+                </span>
+              </div>
+              <p className="text-xs font-semibold text-slate-800 truncate">
+                {currentUser?.area
+                  ? `${currentUser.area}${currentUser.city ? ', ' + currentUser.city : ''}`
+                  : 'Mithibai College, Vile Parle West, Mumbai'}
+              </p>
+            </div>
+            <button
+              onClick={() => navigate(currentUser ? '/complete-profile' : '/login')}
+              className="ml-auto sm:ml-2 text-xs font-bold text-orange-600 hover:text-orange-700 whitespace-nowrap px-2 py-1 rounded-lg hover:bg-orange-50 transition-colors"
+            >
+              Change
+            </button>
+          </div>
+
+          <div className="flex items-center gap-1.5 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100 overflow-x-auto no-scrollbar">
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mr-1 hidden sm:inline">
+              Range:
+            </span>
+            {(['all', '1km', '2km', '5km'] as const).map((dist) => (
+              <button
+                key={dist}
+                onClick={() => setDistanceFilter(dist)}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
+                  distanceFilter === dist
+                    ? 'bg-slate-900 text-white'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                {dist === 'all' ? 'All Distances' : `< ${dist.replace('km', ' km')}`}
+              </button>
+            ))}
+            <button
+              onClick={() => setOnlyOpen(!onlyOpen)}
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
+                onlyOpen
+                  ? 'bg-emerald-600 text-white'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              Open Now
+            </button>
+          </div>
         </div>
       </div>
 

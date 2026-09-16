@@ -24,9 +24,36 @@ interface AuthContextType {
     phone: string;
     email: string;
     password: string;
-    shopName: string;
-    shopAddress: string;
+    shopName?: string;
+    shopAddress?: string;
     stallType?: string;
+  }) => Promise<{ user: AuthUser; shop: OwnerBusinessContext | null }>;
+  completeCustomerProfile: (data: {
+    fullName: string;
+    phone: string;
+    latitude: number;
+    longitude: number;
+    area: string;
+    city: string;
+    photoUrl?: string;
+  }) => Promise<AuthUser>;
+  setupOwnerShop: (data: {
+    ownerName: string;
+    shopName: string;
+    description: string;
+    phone: string;
+    address: string;
+    area: string;
+    city: string;
+    state: string;
+    pincode: string;
+    latitude: number;
+    longitude: number;
+    openingTime: string;
+    closingTime: string;
+    upiId: string;
+    stallType?: string;
+    image?: string;
   }) => Promise<{ user: AuthUser; shop: OwnerBusinessContext }>;
   logout: () => Promise<void>;
   refreshSession: () => Promise<void>;
@@ -121,13 +148,67 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       phone: string;
       email: string;
       password: string;
-      shopName: string;
-      shopAddress: string;
+      shopName?: string;
+      shopAddress?: string;
       stallType?: string;
-    }): Promise<{ user: AuthUser; shop: OwnerBusinessContext }> => {
+    }): Promise<{ user: AuthUser; shop: OwnerBusinessContext | null }> => {
       setIsLoading(true);
       try {
         const res = await authService.registerOwner(data);
+        setCurrentUser(res.user);
+        setCurrentBusiness(res.shop);
+        return res;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    []
+  );
+
+  const completeCustomerProfile = useCallback(
+    async (data: {
+      fullName: string;
+      phone: string;
+      latitude: number;
+      longitude: number;
+      area: string;
+      city: string;
+      photoUrl?: string;
+    }): Promise<AuthUser> => {
+      setIsLoading(true);
+      try {
+        const updated = await authService.completeCustomerProfile(data);
+        setCurrentUser(updated);
+        return updated;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    []
+  );
+
+  const setupOwnerShop = useCallback(
+    async (data: {
+      ownerName: string;
+      shopName: string;
+      description: string;
+      phone: string;
+      address: string;
+      area: string;
+      city: string;
+      state: string;
+      pincode: string;
+      latitude: number;
+      longitude: number;
+      openingTime: string;
+      closingTime: string;
+      upiId: string;
+      stallType?: string;
+      image?: string;
+    }): Promise<{ user: AuthUser; shop: OwnerBusinessContext }> => {
+      setIsLoading(true);
+      try {
+        const res = await authService.setupOwnerShop(data);
         setCurrentUser(res.user);
         setCurrentBusiness(res.shop);
         return res;
@@ -194,6 +275,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     loginAsDemoOwner,
     registerCustomer,
     registerOwner,
+    completeCustomerProfile,
+    setupOwnerShop,
     logout,
     refreshSession,
     updateProfile,

@@ -38,6 +38,14 @@ export const ShopCard: React.FC<ShopCardProps> = ({
     }
   };
 
+  const formatDistance = (dist?: number | string) => {
+    if (dist === undefined || dist === null) return 'Nearby';
+    const num = typeof dist === 'number' ? dist : parseFloat(dist);
+    if (isNaN(num)) return String(dist);
+    if (num < 1) return `${Math.round(num * 1000)} m`;
+    return `${num.toFixed(1)} km`;
+  };
+
   if (layout === 'horizontal') {
     return (
       <div
@@ -105,7 +113,7 @@ export const ShopCard: React.FC<ShopCardProps> = ({
             <span className="w-1 h-1 rounded-full bg-slate-300" />
             <div className="flex items-center gap-1 font-medium text-slate-600">
               <MapPin className="w-3.5 h-3.5 text-slate-400" />
-              <span>{shop.location.distanceKm} km</span>
+              <span>{formatDistance(shop.location?.distanceKm)}</span>
             </div>
           </div>
         </div>
@@ -194,7 +202,7 @@ export const ShopCard: React.FC<ShopCardProps> = ({
             <MapPin className="w-3 h-3 text-slate-400 flex-shrink-0" />
             <span className="truncate">{shop.location.landmark}</span>
             <span>•</span>
-            <span className="font-semibold text-slate-600">{shop.location.distanceKm} km</span>
+            <span className="font-semibold text-slate-600">{formatDistance(shop.location?.distanceKm)}</span>
           </p>
         </div>
 

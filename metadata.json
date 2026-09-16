@@ -1,6 +1,6 @@
 {
   "name": "FoodFlow",
   "description": "Digital ordering for local food stalls, canteens, and thelas. Order, skip the queue, and collect with live token tracking.",
-  "requestFramePermissions": [],
+  "requestFramePermissions": ["geolocation"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

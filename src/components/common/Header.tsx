@@ -77,12 +77,16 @@ export const Header: React.FC<HeaderProps> = ({ onOpenQRScanner }) => {
         {/* Location selector / Counter info */}
         <button
           id="location-selector-btn"
-          onClick={() => navigate('/shops')}
+          onClick={() => (isAuthenticated ? navigate('/complete-profile') : navigate('/shops'))}
           className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 hover:bg-slate-200/80 transition-colors text-xs font-semibold text-slate-700 border border-slate-200/70"
-          title="Current Ordering Zone"
+          title="Current Ordering Zone (Tap to change)"
         >
           <MapPin className="w-3.5 h-3.5 text-orange-600" />
-          <span className="truncate max-w-[160px]">Mithibai College, Vile Parle</span>
+          <span className="truncate max-w-[170px]">
+            {currentUser?.area
+              ? `${currentUser.area}${currentUser.city ? ', ' + currentUser.city : ''}`
+              : 'Mithibai College, Vile Parle'}
+          </span>
           <ChevronRight className="w-3 h-3 text-slate-400" />
         </button>
 

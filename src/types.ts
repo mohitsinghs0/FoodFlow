@@ -23,10 +23,24 @@ export interface Shop {
   image: string;
   bannerImage: string;
   contactPhone?: string;
+  phone?: string;
+  ownerId?: string;
+  latitude?: number;
+  longitude?: number;
+  openingTime?: string;
+  closingTime?: string;
+  upiId?: string;
+  address?: string;
+  area?: string;
+  city?: string;
+  state?: string;
+  pincode?: string;
   location: {
     address: string;
     landmark: string;
     distanceKm: number;
+    latitude?: number;
+    longitude?: number;
   };
   isOpen: boolean;
   openingHours: string;
@@ -179,11 +193,18 @@ export type UserRole = 'customer' | 'owner' | 'admin';
 export interface AuthUser {
   id: string;
   fullName: string;
+  name?: string;
   phone: string;
   email?: string;
   role: UserRole;
   shopId?: string;
   isActive?: boolean;
+  latitude?: number;
+  longitude?: number;
+  area?: string;
+  city?: string;
+  photoUrl?: string;
+  profileCompleted?: boolean;
   createdAt?: string;
 }
 
@@ -191,10 +212,21 @@ export interface OwnerBusinessContext {
   id: string;
   name: string;
   ownerId: string;
+  description?: string;
   phone?: string;
   address?: string;
+  area?: string;
+  city?: string;
+  state?: string;
+  pincode?: string;
+  latitude?: number;
+  longitude?: number;
   stallType?: string;
+  openingTime?: string;
+  closingTime?: string;
+  upiId?: string;
   isOpen?: boolean;
+  isActive?: boolean;
   image?: string;
   rating?: number;
 }
@@ -204,8 +236,15 @@ export interface DatabaseUser {
   phone: string;
   email?: string;
   fullName?: string;
+  name?: string;
   role: UserRole;
   shopId?: string;
+  latitude?: number;
+  longitude?: number;
+  area?: string;
+  city?: string;
+  photoUrl?: string;
+  profileCompleted?: boolean;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;

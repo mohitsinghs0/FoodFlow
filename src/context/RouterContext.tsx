@@ -13,6 +13,8 @@ export type AppRoute =
   | 'profile'
   | 'login'
   | 'register'
+  | 'complete-profile'
+  | 'setup-shop'
   // Business Owner Routes
   | 'business-dashboard'
   | 'business-orders'
@@ -169,6 +171,14 @@ export function parsePath(pathname: string): RouteState {
 
   if (clean === '/register') {
     return { name: 'register', path: '/register', params: { ...params } };
+  }
+
+  if (clean === '/complete-profile') {
+    return { name: 'complete-profile', path: '/complete-profile', params: { ...params } };
+  }
+
+  if (clean === '/setup-shop') {
+    return { name: 'setup-shop', path: '/setup-shop', params: { ...params } };
   }
 
   return { name: 'home', path: '/', params: { ...params } };

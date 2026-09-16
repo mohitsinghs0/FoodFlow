@@ -28,6 +28,8 @@ import { SavedShopsView } from './views/SavedShopsView';
 import { ProfileView } from './views/ProfileView';
 import { LoginView } from './views/LoginView';
 import { RegisterView } from './views/RegisterView';
+import { CompleteProfileView } from './views/CompleteProfileView';
+import { SetupShopView } from './views/business/SetupShopView';
 
 // Business Ecosystem Views
 import { BusinessDashboardView } from './views/business/BusinessDashboardView';
@@ -159,12 +161,21 @@ const AppContent: React.FC = () => {
         return <LoginView />;
       case 'register':
         return <RegisterView />;
+      case 'complete-profile':
+        return <CompleteProfileView />;
+      case 'setup-shop':
+        return <SetupShopView />;
       default:
         return <HomeView onOpenQRScanner={() => setIsQRScannerOpen(true)} />;
     }
   };
 
-  const isAuthPage = route && (route.name === 'login' || route.name === 'register');
+  const isAuthPage =
+    route &&
+    (route.name === 'login' ||
+      route.name === 'register' ||
+      route.name === 'complete-profile' ||
+      route.name === 'setup-shop');
 
   return (
     <div className="min-h-screen bg-[#F8F9FA] text-slate-900 flex flex-col font-sans selection:bg-orange-500 selection:text-white">

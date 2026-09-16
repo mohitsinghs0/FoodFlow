@@ -1,5 +1,7 @@
 import { Shop, ShopCategory, MenuItem } from '../types';
 import { MOCK_SHOPS, MOCK_CATEGORIES, MOCK_MENU_ITEMS } from '../data/mockData';
+import { firestoreSync } from './firestoreSyncService';
+import { calculateDistanceKm, DEFAULT_CUSTOMER_LOCATION } from './geoService';
 
 // Storage keys for persistence
 const SHOPS_STORAGE_KEY = 'foodflow_shops_list';
@@ -28,13 +30,47 @@ export const shopService = {
     }
   },
 
-  async getNearbyShops(categoryId?: string, query?: string): Promise<Shop[]> {
-    await new Promise((r) => setTimeout(r, 60));
+  async getNearbyShops(
+    categoryId?: string,
+    query?: string,
+    userLocation?: { latitude: number; longitude: number }
+  ): Promise<Shop[]> {
+    let shops: Shop[] = [];
+    try {
+      const remoteShops = await firestoreSync.getShops();
+      if (remoteShops && remoteShops.length > 0) {
+        shops = remoteShops;
+      } else {
+        shops = this.getStoredShops();
+      }
+    } catch {
+      shops = this.getStoredShops();
+    }
 
-    let shops = this.getStoredShops();
+    const loc = userLocation || DEFAULT_CUSTOMER_LOCATION;
+
+    // Recalculate distance for each shop based on coordinates
+    shops = shops.map((s) => {
+      const shopLat = s.latitude || s.location?.latitude;
+      const shopLng = s.longitude || s.location?.longitude;
+      if (shopLat && shopLng && loc.latitude && loc.longitude) {
+        const dist = calculateDistanceKm(loc.latitude, loc.longitude, shopLat, shopLng);
+        return {
+          ...s,
+          location: {
+            ...s.location,
+            distanceKm: dist,
+          },
+        };
+      }
+      return s;
+    });
+
+    // Sort by nearest distance first
+    shops.sort((a, b) => (a.location?.distanceKm ?? 999) - (b.location?.distanceKm ?? 999));
 
     if (categoryId && categoryId !== 'all') {
-      shops = shops.filter((s) => s.categories.includes(categoryId));
+      shops = shops.filter((s) => s.categories && s.categories.includes(categoryId));
     }
 
     if (query && query.trim()) {
@@ -42,9 +78,9 @@ export const shopService = {
       shops = shops.filter(
         (s) =>
           s.name.toLowerCase().includes(q) ||
-          s.tagline.toLowerCase().includes(q) ||
-          s.location.address.toLowerCase().includes(q) ||
-          s.categories.some((c) => c.toLowerCase().includes(q))
+          (s.tagline && s.tagline.toLowerCase().includes(q)) ||
+          (s.location?.address && s.location.address.toLowerCase().includes(q)) ||
+          (s.categories && s.categories.some((c) => c.toLowerCase().includes(q)))
       );
     }
 
